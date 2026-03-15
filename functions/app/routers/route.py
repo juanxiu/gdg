@@ -43,17 +43,3 @@ async def compare_routes(
 ):
     service = RouteService()
     return await service.compare_routes(request, user["uid"])
-
-
-@router.post(
-    "/reroute",
-    response_model=RerouteResponse,
-    summary="위험 감지 시 경로 재탐색",
-    description="보행 중 전방 위험이 감지되었을 때, 위험 구간을 우회하는 새로운 SafePath를 탐색합니다.",
-)
-async def reroute(
-    request: RerouteRequest,
-    user: dict = Depends(verify_firebase_token),
-):
-    service = RouteService()
-    return await service.reroute(request, user["uid"])

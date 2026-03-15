@@ -22,21 +22,3 @@ async def get_home_location_info(
 ):
     service = EnvironmentService()
     return await service.get_current(lat, lng)
-
-
-@router.post(
-    "/update",
-    response_model=LocationUpdateResponse,
-    summary="실시간 위치 업데이트",
-    description=(
-        "내비게이션 중 30초 간격으로 위치를 전송합니다.\n\n"
-        "서버는 전방 100~500m의 환경 상태를 선제 확인하여 위험 감지 시 "
-        "`HAZARD_AHEAD` 상태와 함께 우회 경로 재탐색을 권장합니다."
-    ),
-)
-async def update_location(
-    request: LocationUpdateRequest,
-    user: dict = Depends(verify_firebase_token),
-):
-    service = RouteService()
-    return await service.process_location_update(request)
