@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-from typing import List
 from app.models.common import LatLng
 from app.models.environment import (
     CurrentEnvironmentResponse, AirQualityData, WeatherData, 
