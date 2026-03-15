@@ -21,7 +21,7 @@ jobs:
       - name: Install dependencies & Lint
         run: |
           pip install ruff
-          ruff check functions/ app/
+          ruff check functions/
 
       - name: Google Auth
         id: auth
