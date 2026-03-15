@@ -46,7 +46,7 @@ class ConnectionManager:
         if trip_id in self.active_connections:
             try:
                 await self.active_connections[trip_id].close(code=status.WS_1008_POLICY_VIOLATION)
-            except:
+            except Exception:
                 pass
         self.active_connections[trip_id] = websocket
 
@@ -134,5 +134,5 @@ async def navigation_websocket(
         manager.disconnect(trip_id)
         try:
             await websocket.close()
-        except:
+        except Exception:
             pass
