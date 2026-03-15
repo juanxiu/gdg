@@ -15,7 +15,6 @@ from app.services.environment_service import EnvironmentService
 from app.clients.maps_client import MapsClient
 from app.config import get_settings
 from app.db.firestore import get_collection
-from app.services.dijkstra_service import DijkstraRouter
 
 
 import math
@@ -29,7 +28,6 @@ class RouteService:
         self.risk_scorer = RiskScorer()
         self.settings = get_settings()
         self.db = get_collection("routes") # 경로 저장용 컬렉션
-        self.dijkstra_router = DijkstraRouter(self.env_service, self.risk_scorer)
 
     async def find_safe_route(self, request: SafeRouteRequest, user_id: str) -> SafeRouteResponse:
         start_time = time.time()
@@ -92,56 +90,10 @@ class RouteService:
                 "avgRisk": avg_risk
             })
 
-        # --- 추가: Dijkstra 기반 독자 경로 탐색 ---
-        try:
-            grid_path = await self.dijkstra_router.find_path(request.origin, request.destination, weights)
-            if grid_path:
-                # Dijkstra 결과를 RouteSegment 형식으로 변환
-                grid_segments = []
-                total_grid_risk = 0
-                grid_distance = 0
-                
-                for i in range(len(grid_path) - 1):
-                    p1, p2 = grid_path[i], grid_path[i+1]
-                    dist = self._get_distance(p1, p2)
-                    env_dict = await self.env_service.get_for_location(p1)
-                    env = SegmentEnvironment(**env_dict)
-                    score = self.risk_scorer.calculate_segment_risk(env, weights)
-                    
-                    seg = RouteSegment(
-                        segmentId=str(uuid.uuid4()),
-                        startLatLng=p1,
-                        endLatLng=p2,
-                        distance=int(dist),
-                        duration=int(dist / 1.4), # 보행 속도 1.4m/s 가정
-                        riskScore=score,
-                        riskLevel=self.risk_scorer.classify_risk(score),
-                        environment=env,
-                        instruction="안전 경로(그리드)를 따라 이동하세요."
-                    )
-                    grid_segments.append(seg)
-                    total_grid_risk += score * dist
-                    grid_distance += dist
-
-                avg_grid_risk = int(total_grid_risk / grid_distance) if grid_distance > 0 else 0
-                encoded_poly = polyline.encode([(p.lat, p.lng) for p in grid_path])
-
-                scored_paths.append({
-                    "route": {
-                        "polyline": encoded_poly,
-                        "totalDistance": int(grid_distance),
-                        "totalDuration": int(grid_distance / 1.4),
-                    },
-                    "segments": grid_segments,
-                    "avgRisk": avg_grid_risk,
-                })
-        except Exception as e:
-            print(f"Dijkstra search failed: {e}")
-
         if not scored_paths:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No candidate routes found for the given origin and destination"
+                detail="No candidate routes found. Note: Walking/Bicycle directions may not be supported in this region (e.g., Korea)."
             )
 
         # 6. 모든 후보 경로를 Risk Score 순으로 정렬
