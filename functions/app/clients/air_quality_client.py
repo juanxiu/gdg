@@ -26,7 +26,7 @@ class AirQualityClient:
             response = await client.post(
                 f"{self.url}?key={self.api_key}",
                 json=payload,
-                timeout=10.0
+                timeout=20.0
             )
             response.raise_for_status()
             return response.json()

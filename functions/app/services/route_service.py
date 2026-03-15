@@ -12,6 +12,7 @@ from app.services.risk_scorer import RiskScorer
 from app.services.profile_service import ProfileService
 from app.services.environment_service import EnvironmentService
 from app.clients.maps_client import MapsClient
+from app.utils.grid import GridManager
 from app.config import get_settings
 from app.db.firestore import get_collection
 
@@ -48,21 +49,41 @@ class RouteService:
             request.origin, request.destination, request.options
         )
 
-        scored_paths = []
+        # 4. 모든 후보 경로의 세그먼트 좌표 미리 추출 (배치 처리를 위함)
+        all_segments_by_route = []
+        all_locations = []
         for raw_route in candidate_routes:
-            # 4. 경로를 세그먼트로 분할 (maps_client 유틸리티 사용)
             segments_data = self.maps_client.split_route_into_segments(raw_route)
-            
-            # 5. 세그먼트별 환경 데이터 조회 (Firestore Cache 기반)
+            all_segments_by_route.append(segments_data)
+            for seg in segments_data:
+                all_locations.append(seg["startLatLng"])
+
+        # 5. 환경 데이터 한 번에 조회 (Batch)
+        env_results = await self.env_service.get_for_locations_batch(all_locations)
+
+        # 6. 세그먼트별 리스크 점수 계산 및 경로 구성
+        scored_paths = []
+        for i, raw_route in enumerate(candidate_routes):
+            segments_data = all_segments_by_route[i]
             path_segments = []
             total_risk = 0
             
             for seg in segments_data:
-                # 환경 데이터 가져오기 (env_service가 Firestore에서 조회)
-                env_dict = await self.env_service.get_for_location(seg["startLatLng"])
+                start_latlng = LatLng.model_validate(seg["startLatLng"])
+                grid_id = GridManager.lat_lng_to_grid_id(start_latlng.lat, start_latlng.lng)
+                env_dict = env_results.get(grid_id)
+                
+                if not env_dict:
+                    # 데이터 누락 시 기본값 (env_service에서 보장하지만 방어적 처리)
+                    env_dict = {
+                        "gridId": grid_id,
+                        "lat": start_latlng.lat, "lng": start_latlng.lng,
+                        "aqi": 0, "pollenLevel": 0, "temperature": 20.0
+                    }
+                
                 env = SegmentEnvironment(**env_dict)
                 
-                # Risk Score 계산
+                # Risk Score 계산 (순수 연산이므로 루프 내에서 수행)
                 score = self.risk_scorer.calculate_segment_risk(env, weights)
                 level = self.risk_scorer.classify_risk(score)
                 
@@ -219,8 +240,8 @@ class RouteService:
             # 단순 노드 거리 대신 점-대-세그먼트 거리 사용 고려 (고도화)
             d = self._get_point_to_segment_distance(
                 request.location, 
-                LatLng(**seg["startLatLng"]), 
-                LatLng(**seg["endLatLng"])
+                LatLng.model_validate(seg["startLatLng"]), 
+                LatLng.model_validate(seg["endLatLng"])
             )
             if d < min_dist:
                 min_dist = d
@@ -234,18 +255,27 @@ class RouteService:
         # 4. 전방 위험 스캔 (다음 5개 세그먼트 약 500m)
         ahead_hazards = []
         hazard_detected = False
-        scan_dist = 0
+        scan_segments = segments[curr_idx + 1: min(curr_idx + 6, len(segments))]
+        scan_locations = [LatLng.model_validate(s["startLatLng"]) for s in scan_segments]
         
-        # 프로필 정보를 통한 가중치 획득 (스캔 시 필요)
+        # 가중치 획득
         profile = await self.profile_service.get(request.profileId, user_id)
         weights = self.risk_scorer.resolve_weights(profile.conditions, profile.customWeights) if profile else {}
 
-        for i in range(curr_idx + 1, min(curr_idx + 6, len(segments))):
-            seg = segments[i]
+        # 배치 조회
+        env_results = await self.env_service.get_for_locations_batch(scan_locations) if scan_locations else {}
+        
+        scan_dist = 0
+        for seg in scan_segments:
             scan_dist += seg["distance"]
             
-            # 실시간 환경 데이터 조회 (Cache-Aside)
-            env_dict = await self.env_service.get_for_location(LatLng(**seg["startLatLng"]))
+            start_latlng = LatLng.model_validate(seg["startLatLng"])
+            grid_id = GridManager.lat_lng_to_grid_id(start_latlng.lat, start_latlng.lng)
+            env_dict = env_results.get(grid_id)
+            
+            if not env_dict:
+                env_dict = {"gridId": grid_id, "lat": start_latlng.lat, "lng": start_latlng.lng, "aqi": 0, "pollenLevel": 0}
+            
             env = SegmentEnvironment(**env_dict)
             
             # 최신 데이터 기반 리스크 재계산
@@ -257,7 +287,7 @@ class RouteService:
                     type=HazardType.AIR_POLLUTION if env_dict.get("aqi", 0) > 100 else HazardType.POLLEN,
                     severity=self.risk_scorer.classify_risk(fresh_score),
                     distanceAhead=scan_dist,
-                    location=LatLng(**seg["startLatLng"])
+                    location=LatLng.model_validate(seg["startLatLng"])
                 ))
 
         return LocationUpdateResponse(

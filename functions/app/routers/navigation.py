@@ -17,6 +17,7 @@ async def authenticate_websocket(websocket: WebSocket, token: str) -> dict:
         return {"uid": "1", "email": "test@safepath.dev"}
         
     if not token:
+        logger.warning("WebSocket connection attempt missing token query parameter")
         return None
 
     try:
@@ -32,7 +33,7 @@ async def authenticate_websocket(websocket: WebSocket, token: str) -> dict:
             "email": decoded_token.get("email"),
         }
     except Exception as e:
-        logger.error(f"WebSocket auth failed: {e}")
+        logger.error(f"WebSocket auth failed for token {token[:10]}...: {e}")
         return None
 
 class ConnectionManager:
@@ -62,6 +63,10 @@ class ConnectionManager:
             logger.error(f"Failed to send message: {e}")
 
 manager = ConnectionManager()
+
+@router.get("/ws/{trip_id}", summary="[WebSocket] 실시간 내비게이션 연결", description="**이 엔드포인트는 WebSocket 프로토콜(wss://) 전용입니다.**\n\n- **연결 방법**: `wss://{domain}/api/navigation/ws/{trip_id}?token={Firebase_ID_Token}`\n- **테스트 방법**: Postman의 WebSocket 또는 `wscat` 등을 이용하세요.")
+async def websocket_documentation(trip_id: str, token: str = Query(..., description="Firebase ID Token")):
+    return {"message": "WebSocket 전용 엔드포인트입니다. wss:// 프로토콜로 연결하세요."}
 
 @router.websocket("/ws/{trip_id}")
 async def navigation_websocket(

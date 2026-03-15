@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from typing import List, Dict
 from app.models.common import LatLng
 from app.models.environment import (
     CurrentEnvironmentResponse, AirQualityData, WeatherData, 
@@ -22,72 +23,119 @@ class EnvironmentService:
         self.collection = get_collection(self.settings.firestore_env_collection)
         self.aq_client = AirQualityClient(self.settings.google_maps_api_key)
         self.pollen_client = PollenClient(self.settings.google_maps_api_key)
+        self.semaphore = asyncio.Semaphore(10) # 최대 10개 병렬 호출 제한
 
     async def get_for_location(self, location: LatLng):
         """특정 좌표의 실시간 환경 데이터 조회 (Cache-Aside 전략)"""
+        results = await self.get_for_locations_batch([location])
         grid_id = GridManager.lat_lng_to_grid_id(location.lat, location.lng)
-        doc_ref = self.collection.document(grid_id)
-        doc = await doc_ref.get()
+        return results.get(grid_id)
+
+    async def get_for_locations_batch(self, locations: List[LatLng]) -> Dict[str, dict]:
+        """여러 좌표의 실시간 환경 데이터를 배치로 조회"""
+        grid_map = {}
+        for loc in locations:
+            grid_id = GridManager.lat_lng_to_grid_id(loc.lat, loc.lng)
+            if grid_id not in grid_map:
+                grid_map[grid_id] = loc
+
+        grid_ids = list(grid_map.keys())
+        print(f"[DEBUG] EnvironmentService: {len(locations)} locations mapped to {len(grid_ids)} unique grids")
+        if not grid_ids:
+            return {}
+
+        from app.db.firestore import get_db
+        db = get_db()
+        doc_refs = [self.collection.document(gid) for gid in grid_ids]
+
+        # Firestore 배치 조회 (Async Generator 처리)
+        docs = []
+        async for doc in db.get_all(doc_refs):
+            docs.append(doc)
         
-        # 캐시 히트 및 만료 확인 (1시간)
-        if doc.exists:
-            data = doc.to_dict()
-            updated_at = data.get("updatedAt")
-            if updated_at:
-                # Firestore Timestamp를 datetime으로 변환 (직접 비교 가능)
-                if (datetime.utcnow().replace(tzinfo=None) - updated_at.replace(tzinfo=None)) < timedelta(hours=1):
-                    return data
+        results = {}
+        fetch_tasks = []
+        now = datetime.utcnow().replace(tzinfo=None)
         
-        # 캐시 미스 또는 만료: 실시간 데이터 호출
-        return await self._fetch_and_cache(location.lat, location.lng, grid_id)
+        for doc in docs:
+            data = None
+            if doc.exists:
+                doc_data = doc.to_dict()
+                updated_at = doc_data.get("updatedAt")
+                # updated_at은 Firestore Timestamp일 수 있음 (가끔 datetime으로 자동 변환되기도 함)
+                if updated_at:
+                    if hasattr(updated_at, "replace"):
+                         updated_at_dt = updated_at.replace(tzinfo=None)
+                    else: # Timestamp object
+                         updated_at_dt = updated_at.to_datetime().replace(tzinfo=None)
+                         
+                    if (now - updated_at_dt) < timedelta(hours=1):
+                        data = doc_data
+            
+            grid_id = doc.id
+            if data:
+                results[grid_id] = data
+            else:
+                loc = grid_map[grid_id]
+                fetch_tasks.append(self._fetch_and_cache(loc.lat, loc.lng, grid_id))
+
+        if fetch_tasks:
+            print(f"[DEBUG] EnvironmentService: Fetching real-time data for {len(fetch_tasks)} grids")
+            # 실시간 API 호출 병렬 수행
+            fetched_results = await asyncio.gather(*fetch_tasks)
+            for fr in fetched_results:
+                results[fr["gridId"]] = fr
+                
+        return results
 
     async def _fetch_and_cache(self, lat: float, lng: float, grid_id: str):
         """실시간 API 호출 및 Firestore 저장"""
-        try:
-            # 병렬 호출
-            aq_task = self.aq_client.get_current_conditions(lat, lng)
-            pollen_task = self.pollen_client.get_forecast(lat, lng)
-            aq_data, pollen_data = await asyncio.gather(aq_task, pollen_task)
+        async with self.semaphore:
+            try:
+                # 병렬 호출
+                aq_task = self.aq_client.get_current_conditions(lat, lng)
+                pollen_task = self.pollen_client.get_forecast(lat, lng)
+                aq_data, pollen_data = await asyncio.gather(aq_task, pollen_task)
 
-            # 데이터 가공 (pipeline/main.py 로직 유지)
-            pollen_level = 0
-            if pollen_data.get("dailyInfo") and pollen_data["dailyInfo"][0].get("pollenTypeInfo"):
-                info = pollen_data["dailyInfo"][0]["pollenTypeInfo"][0]
-                if "indexInfo" in info:
-                    pollen_level = info["indexInfo"]["value"]
+                # 데이터 가공 (pipeline/main.py 로직 유지)
+                pollen_level = 0
+                if pollen_data.get("dailyInfo") and pollen_data["dailyInfo"][0].get("pollenTypeInfo"):
+                    info = pollen_data["dailyInfo"][0]["pollenTypeInfo"][0]
+                    if "indexInfo" in info:
+                        pollen_level = info["indexInfo"]["value"]
 
-            processed_data = {
-                "gridId": grid_id,
-                "lat": lat,
-                "lng": lng,
-                "updatedAt": firestore.SERVER_TIMESTAMP,
-                "aqi": aq_data["indexes"][0]["aqi"],
-                "pm25": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "pm25"), 0),
-                "pm10": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "pm10"), 0),
-                "no2": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "no2"), 0),
-                "o3": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "o3"), 0),
-                "pollenLevel": pollen_level,
-                "temperature": 0.0, # 추후 기상 API 연동
-                "feelsLike": 0.0,
-                "humidity": 0,
-                "shadeRatio": 0.0
-            }
+                processed_data = {
+                    "gridId": grid_id,
+                    "lat": lat,
+                    "lng": lng,
+                    "updatedAt": firestore.SERVER_TIMESTAMP,
+                    "aqi": aq_data["indexes"][0]["aqi"],
+                    "pm25": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "pm25"), 0),
+                    "pm10": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "pm10"), 0),
+                    "no2": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "no2"), 0),
+                    "o3": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "o3"), 0),
+                    "pollenLevel": pollen_level,
+                    "temperature": 0.0, # 추후 기상 API 연동
+                    "feelsLike": 0.0,
+                    "humidity": 0,
+                    "shadeRatio": 0.0
+                }
 
-            # Firestore 저장 (백그라운드 실행 권장되나 여기서는 동기적 유지)
-            await self.collection.document(grid_id).set(processed_data)
-            return processed_data
-            
-        except Exception as e:
-            # API 에러 시 기본값 반환 (로그 남기기 필요)
-            print(f"Error fetching real-time data: {e}")
-            return {
-                "gridId": grid_id,
-                "lat": lat,
-                "lng": lng,
-                "aqi": 0, "pm25": 0.0, "pm10": 0.0, "no2": 0.0, "o3": 0.0,
-                "pollenLevel": 0, "temperature": 20.0, "feelsLike": 20.0,
-                "humidity": 50, "shadeRatio": 0.0, "slope": 0.0
-            }
+                # Firestore 저장 (백그라운드 실행 권장되나 여기서는 동기적 유지)
+                await self.collection.document(grid_id).set(processed_data)
+                return processed_data
+                
+            except Exception as e:
+                # API 에러 시 기본값 반환 (로그 남기기 필요)
+                print(f"Error fetching real-time data: {e}")
+                return {
+                    "gridId": grid_id,
+                    "lat": lat,
+                    "lng": lng,
+                    "aqi": 0, "pm25": 0.0, "pm10": 0.0, "no2": 0.0, "o3": 0.0,
+                    "pollenLevel": 0, "temperature": 20.0, "feelsLike": 20.0,
+                    "humidity": 50, "shadeRatio": 0.0, "slope": 0.0
+                }
 
     async def get_current(self, lat: float, lng: float) -> CurrentEnvironmentResponse:
         """현재 위치의 환경 상세 정보 (API 엔드포인트용)"""

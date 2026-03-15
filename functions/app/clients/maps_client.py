@@ -100,7 +100,12 @@ class MapsClient:
             payload["routingPreference"] = "TRAFFIC_AWARE"
 
         async with httpx.AsyncClient() as client:
-            response = await client.post(self.routes_url, json=payload, headers=headers)
+            response = await client.post(
+                self.routes_url, 
+                json=payload, 
+                headers=headers,
+                timeout=20.0
+            )
             if response.status_code != 200:
                 print(f"Error from Routes API: {response.text}")
                 return []

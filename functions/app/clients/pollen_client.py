@@ -23,7 +23,7 @@ class PollenClient:
             response = await client.get(
                 self.url,
                 params=params,
-                timeout=10.0
+                timeout=20.0
             )
             response.raise_for_status()
             return response.json()
