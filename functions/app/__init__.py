@@ -14,12 +14,8 @@ def create_app() -> FastAPI:
     # Cloud Run/Local 환경에 따라 서버 목록 설정 (Production을 우선순위로)
     servers = [
         {
-            "url": "https://safepath-api-33qley75qa-du.a.run.app",
-            "description": "☁️ GCP Cloud Run (Production)",
-        },
-        {
             "url": "https://api-190228148301.asia-northeast3.run.app",
-            "description": "☁️ GCP Cloud Run (Legacy/Custom)",
+            "description": "☁️ GCP Cloud Run (Production)",
         },
         {
             "url": "http://localhost:8080",
