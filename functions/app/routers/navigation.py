@@ -1,46 +1,92 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query, status
 import json
 import logging
 from app.services.route_service import RouteService
 from app.models.route import LocationUpdateRequest, LatLng
+from app.config import get_settings
 
 router = APIRouter(prefix="/api/navigation", tags=["Navigation"])
 logger = logging.getLogger("uvicorn")
 
+async def authenticate_websocket(websocket: WebSocket, token: str) -> dict:
+    """웹소켓 연결 시 Firebase 토큰 검증"""
+    settings = get_settings()
+    
+    # 로컬 환경 테스트용
+    if settings.environment == "local":
+        return {"uid": "1", "email": "test@safepath.dev"}
+        
+    if not token:
+        return None
+
+    try:
+        import firebase_admin
+        from firebase_admin import auth
+        
+        if not firebase_admin._apps:
+            firebase_admin.initialize_app()
+            
+        decoded_token = auth.verify_id_token(token)
+        return {
+            "uid": decoded_token["uid"],
+            "email": decoded_token.get("email"),
+        }
+    except Exception as e:
+        logger.error(f"WebSocket auth failed: {e}")
+        return None
+
 class ConnectionManager:
     def __init__(self):
+        # trip_id -> WebSocket 매핑
         self.active_connections: dict[str, WebSocket] = {}
 
     async def connect(self, trip_id: str, websocket: WebSocket):
         await websocket.accept()
+        # 기존 연결이 있다면 정리 (중복 연결 방지)
+        if trip_id in self.active_connections:
+            try:
+                await self.active_connections[trip_id].close(code=status.WS_1008_POLICY_VIOLATION)
+            except:
+                pass
         self.active_connections[trip_id] = websocket
 
     def disconnect(self, trip_id: str):
         if trip_id in self.active_connections:
             del self.active_connections[trip_id]
+            logger.info(f"Connection for trip {trip_id} removed from manager")
 
     async def send_personal_message(self, message: dict, websocket: WebSocket):
-        await websocket.send_json(message)
+        try:
+            await websocket.send_json(message)
+        except Exception as e:
+            logger.error(f"Failed to send message: {e}")
 
 manager = ConnectionManager()
 
 @router.websocket("/ws/{trip_id}")
-async def navigation_websocket(websocket: WebSocket, trip_id: str):
+async def navigation_websocket(
+    websocket: WebSocket, 
+    trip_id: str,
+    token: str = Query(None)
+):
+    # 1. 인증 확인
+    user_info = await authenticate_websocket(websocket, token)
+    if not user_info:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return
+
     await manager.connect(trip_id, websocket)
     service = RouteService()
+    user_id = user_info["uid"]
     
     try:
         while True:
-            # 클라이언트로부터 실시간 위치 및 데이터 수신
-            data = await websocket.receive_text()
-            message = json.loads(data)
-            
-            # 위치 업데이트 처리 (LocationUpdateRequest 형식 가정)
             try:
+                # 클라이언트로부터 실시간 위치 및 데이터 수신
+                data = await websocket.receive_text()
+                message = json.loads(data)
+                
                 if "location" in message:
-                    # TODO: 실제 운영 환경에서는 초기 연결 시 토큰 검증을 수행하고 user_id를 고정해야 함
-                    user_id = message.get("userId", "anonymous")
-                    
                     update_req = LocationUpdateRequest(
                         routeId=trip_id,
                         profileId=message.get("profileId", "default"),
@@ -61,7 +107,17 @@ async def navigation_websocket(websocket: WebSocket, trip_id: str):
                             "severity": "WARNING",
                             "aheadScan": response.aheadScan.model_dump()
                         }, websocket)
+                else:
+                    await manager.send_personal_message({
+                        "type": "ERROR",
+                        "message": "잘못된 데이터 형식입니다. 'location' 필드가 필요합니다."
+                    }, websocket)
 
+            except json.JSONDecodeError:
+                await manager.send_personal_message({
+                    "type": "ERROR",
+                    "message": "유효하지 않은 JSON 형식입니다."
+                }, websocket)
             except Exception as e:
                 logger.error(f"Error processing navigation data for trip {trip_id}: {e}")
                 await manager.send_personal_message({
@@ -71,8 +127,12 @@ async def navigation_websocket(websocket: WebSocket, trip_id: str):
                 }, websocket)
 
     except WebSocketDisconnect:
-        manager.disconnect(trip_id)
-        logger.info(f"Trip {trip_id} disconnected")
+        logger.info(f"Trip {trip_id} disconnected by client")
     except Exception as e:
-        logger.error(f"WebSocket Error: {e}")
+        logger.error(f"WebSocket Error for trip {trip_id}: {e}")
+    finally:
         manager.disconnect(trip_id)
+        try:
+            await websocket.close()
+        except:
+            pass
