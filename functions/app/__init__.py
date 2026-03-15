@@ -97,8 +97,14 @@ def create_app() -> FastAPI:
     # CORS 미들웨어 (가장 마지막에 추가하여 가장 먼저 실행되도록 함)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
+        allow_origins=[
+            "http://localhost:3000",
+            "http://localhost:8080",
+            "http://localhost:5173",
+            "https://api-190228148301.asia-northeast3.run.app",
+        ],
+        allow_origin_regex="https?://.*",  # 모든 origin을 허용하면서 credentials 지원
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
         expose_headers=["*"],
