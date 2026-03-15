@@ -8,8 +8,8 @@ from app.models.environment import (
 from app.config import get_settings
 from app.db.firestore import get_collection
 from app.utils.grid import GridManager
-from pipeline.collector.clients.air_quality_client import AirQualityClient
-from pipeline.collector.clients.pollen_client import PollenClient
+from app.clients.air_quality_client import AirQualityClient
+from app.clients.pollen_client import PollenClient
 import asyncio
 from google.cloud import firestore
 
