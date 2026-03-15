@@ -1,0 +1,57 @@
+name: Deploy to Google Cloud Functions
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies & Lint
+        run: |
+          pip install ruff
+          ruff check functions/ app/
+
+      - name: Google Auth
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: '${{ secrets.GCP_SA_KEY }}'
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy SafePath API
+        run: |
+          gcloud functions deploy safepath-api \
+            --gen2 \
+            --runtime=python311 \
+            --region=asia-northeast3 \
+            --source=./functions \
+            --entry-point=safepath_api \
+            --trigger-http \
+            --allow-unauthenticated \
+            --set-env-vars="ENVIRONMENT=production,GCP_REGION=asia-northeast3,GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}"
+
+      - name: Deploy SafePath Pipeline
+        run: |
+          gcloud functions deploy safepath-pipeline \
+            --gen2 \
+            --runtime=python311 \
+            --region=asia-northeast3 \
+            --source=./pipeline \
+            --entry-point=collect_environment_data \
+            --trigger-http \
+            --no-allow-unauthenticated \
+            --set-env-vars="GCP_PROJECT_ID=${{ secrets.GCP_PROJECT_ID }},GOOGLE_MAPS_API_KEY=${{ secrets.GOOGLE_MAPS_API_KEY }}"
