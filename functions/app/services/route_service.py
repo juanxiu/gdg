@@ -1,7 +1,6 @@
 import uuid
 import time
 import polyline
-from typing import List
 from fastapi import HTTPException, status
 from app.models.common import LatLng, RiskLevel, HazardType
 from app.models.route import (
@@ -105,7 +104,6 @@ class RouteService:
                 for i in range(len(grid_path) - 1):
                     p1, p2 = grid_path[i], grid_path[i+1]
                     dist = self._get_distance(p1, p2)
-                    from app.models.route import SegmentEnvironment
                     env_dict = await self.env_service.get_for_location(p1)
                     env = SegmentEnvironment(**env_dict)
                     score = self.risk_scorer.calculate_segment_risk(env, weights)

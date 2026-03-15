@@ -1,6 +1,5 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import json
-import asyncio
 import logging
 from app.services.route_service import RouteService
 from app.models.route import LocationUpdateRequest, LatLng
