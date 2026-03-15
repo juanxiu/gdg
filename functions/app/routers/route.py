@@ -1,9 +1,7 @@
 """SafePath 경로 탐색, 비교, 재탐색 라우터"""
 from fastapi import APIRouter, Depends
-from app.models.route import (
     SafeRouteRequest, SafeRouteResponse,
     CompareRequest, CompareResponse,
-    RerouteRequest, RerouteResponse,
 )
 from app.middleware.auth import verify_firebase_token
 from app.services.route_service import RouteService

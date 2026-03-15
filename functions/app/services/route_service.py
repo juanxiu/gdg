@@ -1,6 +1,5 @@
 import uuid
 import time
-import polyline
 from fastapi import HTTPException, status
 from app.models.common import LatLng, RiskLevel, HazardType
 from app.models.route import (

@@ -1,8 +1,6 @@
 """실시간 위치 업데이트 & 전방 위험 감지 라우터"""
 from fastapi import APIRouter, Depends, Query
-from app.models.route import LocationUpdateRequest, LocationUpdateResponse
 from app.middleware.auth import verify_firebase_token
-from app.services.route_service import RouteService
 from app.services.environment_service import EnvironmentService
 from app.models.environment import CurrentEnvironmentResponse
 
