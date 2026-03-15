@@ -11,7 +11,7 @@ try:
     from app import create_app
     app = create_app()
     logger.info("✅ SafePath API initialized successfully")
-except Exception as e:
+except Exception:
     logger.error("❌ Critical Error during SafePath API initialization")
     logger.error(traceback.format_exc())
     sys.stderr.write(traceback.format_exc())
