@@ -21,7 +21,7 @@ def create_app() -> FastAPI:
             "description": "🖥️ 로컬 개발 서버",
         },
         {
-            "url": f"https://safepath-api-{settings.gcp_project_id}.a.run.app",
+            "url": f"https://safepath-api-33qley75qa-du.a.run.app",
             "description": "☁️ GCP Cloud Run (Production)",
         },
     ]
