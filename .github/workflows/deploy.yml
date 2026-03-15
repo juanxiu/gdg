@@ -40,7 +40,8 @@ jobs:
             cloudbuild.googleapis.com \
             artifactregistry.googleapis.com \
             logging.googleapis.com \
-            pubsub.googleapis.com
+            pubsub.googleapis.com \
+            cloudresourcemanager.googleapis.com
 
       - name: Build and Push Docker Image
         run: |
