@@ -1,6 +1,7 @@
 from app import create_app
 
 app = create_app()
+print("✅ SafePath API initialized successfully")
 
 # 로컬 개발 및 Cloud Run 실행용
 if __name__ == "__main__":

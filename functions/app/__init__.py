@@ -12,7 +12,8 @@ def create_app() -> FastAPI:
 
     # GCF 2nd gen (Cloud Functions) URL은 함수 이름이 경로 앞에 붙습니다.
     # 이를 처리하기 위해 production 환경에서 root_path를 설정합니다.
-    root_path = "/safepath-api" if settings.environment == "production" else ""
+    # Cloud Run (Direct Service) 배포에서는 root_path가 필요하지 않습니다.
+    root_path = ""
 
     servers = [
         {
@@ -20,8 +21,8 @@ def create_app() -> FastAPI:
             "description": "🖥️ 로컬 개발 서버",
         },
         {
-            "url": f"https://{settings.gcp_region}-{settings.gcp_project_id}.cloudfunctions.net/safepath-api",
-            "description": "☁️ GCP Cloud Functions (Production)",
+            "url": f"https://safepath-api-{settings.gcp_project_id}.a.run.app",
+            "description": "☁️ GCP Cloud Run (Production)",
         },
     ]
 
