@@ -56,7 +56,7 @@ class AccountService:
                 token=token,
                 isNewUser=False
             )
-        except Exception as e:
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="이메일 또는 비밀번호가 올바르지 않습니다."
