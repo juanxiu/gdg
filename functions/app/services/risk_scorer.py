@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict
 from app.models.profile import HealthConditions, CustomWeights
 from app.models.route import SegmentEnvironment, RiskLevel
 
@@ -47,8 +47,10 @@ class RiskScorer:
                 
                 # 심각도에 따른 배수 (low: 0.7, medium: 1.0, high: 1.5)
                 multiplier = 1.0
-                if detail["severity"] == "low": multiplier = 0.7
-                elif detail["severity"] == "high": multiplier = 1.5
+                if detail["severity"] == "low":
+                    multiplier = 0.7
+                elif detail["severity"] == "high":
+                    multiplier = 1.5
 
                 for key in combined_weights:
                     combined_weights[key] += preset.get(key, 0.0) * multiplier
@@ -72,7 +74,8 @@ class RiskScorer:
     @staticmethod
     def normalize_temp(feels_like: float) -> float:
         """체감온도를 0~1 범위로 정규화 (30도 기준)"""
-        if feels_like < 25: return 0.0
+        if feels_like < 25:
+            return 0.0
         return min((feels_like - 25) / 10.0, 1.0)  # 35도 이상이면 최고 위험
 
     @staticmethod
@@ -98,7 +101,8 @@ class RiskScorer:
             weighted_sum += scores.get(key, 0.0) * weight
             total_weight += weight
 
-        if total_weight == 0: return 0
+        if total_weight == 0:
+            return 0
         
         # 3. 0~100 스케일링
         final_score = (weighted_sum / total_weight) * 100
@@ -107,7 +111,10 @@ class RiskScorer:
     @staticmethod
     def classify_risk(score: int) -> RiskLevel:
         """점수에 따른 등급 분류"""
-        if score < 20: return RiskLevel.SAFE
-        if score < 50: return RiskLevel.CAUTION
-        if score < 80: return RiskLevel.WARNING
+        if score < 20:
+            return RiskLevel.SAFE
+        if score < 50:
+            return RiskLevel.CAUTION
+        if score < 80:
+            return RiskLevel.WARNING
         return RiskLevel.DANGER

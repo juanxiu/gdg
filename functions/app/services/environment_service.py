@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import List
 from app.models.common import LatLng
 from app.models.environment import (
     CurrentEnvironmentResponse, AirQualityData, WeatherData, 
@@ -125,15 +125,21 @@ class EnvironmentService:
         )
 
     def _get_aqi_category(self, aqi: int) -> str:
-        if aqi <= 50: return "Good"
-        elif aqi <= 100: return "Moderate"
-        elif aqi <= 150: return "Unhealthy for Sensitive Groups"
-        elif aqi <= 200: return "Unhealthy"
+        if aqi <= 50:
+            return "Good"
+        elif aqi <= 100:
+            return "Moderate"
+        elif aqi <= 150:
+            return "Unhealthy for Sensitive Groups"
+        elif aqi <= 200:
+            return "Unhealthy"
         return "Hazardous"
 
     def _get_pollen_category(self, level: int) -> str:
-        if level <= 1: return "Low"
-        elif level <= 3: return "Moderate"
+        if level <= 1:
+            return "Low"
+        elif level <= 3:
+            return "Moderate"
         return "High"
 
     async def get_area_data(self, swLat: float, swLng: float, neLat: float, neLng: float, zoom: int, data_type: EnvironmentalDataType) -> EnvironmentAreaResponse:
@@ -163,9 +169,12 @@ class EnvironmentService:
                         level = "SAFE"
                         color = "#4CAF50"
                         if data_type == EnvironmentalDataType.AQI:
-                            if val > 150: level, color = "DANGER", "#F44336"
-                            elif val > 100: level, color = "WARNING", "#FF9800"
-                            elif val > 50: level, color = "CAUTION", "#FFEB3B"
+                            if val > 150:
+                                level, color = "DANGER", "#F44336"
+                            elif val > 100:
+                                level, color = "WARNING", "#FF9800"
+                            elif val > 50:
+                                level, color = "CAUTION", "#FFEB3B"
                         
                         areas.append(EnvironmentAreaInfo(
                             lat=curr_lat,

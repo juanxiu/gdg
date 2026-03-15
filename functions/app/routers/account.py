@@ -1,5 +1,5 @@
 """계정 관리 라우터"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from app.middleware.auth import verify_firebase_token
 
 from app.models.account import SignupRequest, LoginRequest, AuthResponse

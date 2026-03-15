@@ -1,5 +1,4 @@
 from datetime import datetime, time as dt_time
-from typing import Optional, List
 from app.models.report import WeeklyReportResponse, WeeklyReportSummary, ExposureSummary, TripSummary
 from app.db.firestore import get_collection
 

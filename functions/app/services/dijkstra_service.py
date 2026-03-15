@@ -1,8 +1,7 @@
 import math
 import heapq
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple
 from app.models.common import LatLng
-from app.utils.grid import GridManager
 from app.services.environment_service import EnvironmentService
 from app.services.risk_scorer import RiskScorer
 
@@ -71,7 +70,8 @@ class DijkstraRouter:
         neighbors = []
         for dx in [-1, 0, 1]:
             for dy in [-1, 0, 1]:
-                if dx == 0 and dy == 0: continue
+                if dx == 0 and dy == 0:
+                    continue
                 neighbors.append((node[0] + dx, node[1] + dy))
         return neighbors
 

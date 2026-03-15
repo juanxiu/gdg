@@ -1,5 +1,3 @@
-import math
-from typing import List, Tuple
 
 
 class GridManager:

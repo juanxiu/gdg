@@ -1,8 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional
 from app.db.firestore import get_collection
-from app.models.profile import ProfileCreateRequest, ProfileResponse, ProfileUpdateRequest, CustomWeights, HealthConditions
+from app.models.profile import ProfileCreateRequest, ProfileResponse, ProfileUpdateRequest, CustomWeights
 
 
 class ProfileService:

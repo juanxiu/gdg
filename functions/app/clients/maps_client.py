@@ -1,9 +1,7 @@
 import httpx
-import polyline
-import uuid
-from typing import List, Dict
+from typing import List
 from app.models.common import LatLng
-from app.models.route import RouteOptions, TravelMode
+from app.models.route import RouteOptions
 from app.config import get_settings
 
 
