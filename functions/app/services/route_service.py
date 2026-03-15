@@ -258,6 +258,9 @@ class RouteService:
         route_data = route_doc.to_dict()
         segments = route_data.get("segments", [])
         
+        if not segments:
+            raise HTTPException(status_code=400, detail="The route has no valid segments.")
+        
         # 2. 현재 위치와 가장 가까운 세그먼트 찾기
         curr_idx = 0
         min_dist = float('inf')
