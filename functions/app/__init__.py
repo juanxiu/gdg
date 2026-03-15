@@ -11,19 +11,15 @@ def create_app() -> FastAPI:
     """FastAPI 앱 팩토리 — Swagger UI 설정 포함"""
     settings = get_settings()
 
-    # GCF 2nd gen (Cloud Functions) URL은 함수 이름이 경로 앞에 붙습니다.
-    # 이를 처리하기 위해 production 환경에서 root_path를 설정합니다.
-    # Cloud Run (Direct Service) 배포에서는 root_path가 필요하지 않습니다.
-    root_path = ""
-
+    # Cloud Run/Local 환경에 따라 서버 목록 설정 (Production을 우선순위로)
     servers = [
-        {
-            "url": "http://localhost:8080",
-            "description": "🖥️ 로컬 개발 서버",
-        },
         {
             "url": "https://safepath-api-33qley75qa-du.a.run.app",
             "description": "☁️ GCP Cloud Run (Production)",
+        },
+        {
+            "url": "http://localhost:8080",
+            "description": "🖥️ 로컬 개발 서버",
         },
     ]
 
@@ -45,7 +41,6 @@ def create_app() -> FastAPI:
         ),
         version="1.0.0",
         servers=servers,
-        root_path=root_path,
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
@@ -61,16 +56,7 @@ def create_app() -> FastAPI:
         ],
     )
 
-    # CORS 미들웨어 설정
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    # 라우터 등록
+    # 1. 라우터 등록
     app.include_router(profile.router)
     app.include_router(route.router)
     app.include_router(location.router)
@@ -80,6 +66,19 @@ def create_app() -> FastAPI:
     app.include_router(search.router)
     app.include_router(navigation.router)
 
+    # 2. 예외 처리기 등록
+    @app.exception_handler(Exception)
+    async def global_exception_handler(request: Request, exc: Exception):
+        logger = logging.getLogger("uvicorn")
+        logger.error(f"Global Exception: {str(exc)}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(
+            status_code=500,
+            content={"code": "FRS_004", "message": f"서버 전역 오류: {str(exc)}", "data": traceback.format_exc()}
+        )
+
+    # 3. 미들웨어 등록 (역순으로 실행됨)
+    # 로깅 미들웨어
     @app.middleware("http")
     async def log_requests(request: Request, call_next):
         logger = logging.getLogger("uvicorn")
@@ -95,15 +94,15 @@ def create_app() -> FastAPI:
                 content={"code": "FRS_004", "message": f"서버 내부 오류: {str(e)}", "data": traceback.format_exc()}
             )
 
-    @app.exception_handler(Exception)
-    async def global_exception_handler(request: Request, exc: Exception):
-        logger = logging.getLogger("uvicorn")
-        logger.error(f"Global Exception: {str(exc)}")
-        logger.error(traceback.format_exc())
-        return JSONResponse(
-            status_code=500,
-            content={"code": "FRS_004", "message": f"서버 전역 오류: {str(exc)}", "data": traceback.format_exc()}
-        )
+    # CORS 미들웨어 (가장 마지막에 추가하여 가장 먼저 실행되도록 함)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+        expose_headers=["*"],
+    )
 
     @app.get("/", tags=["Health Check"])
     async def health_check():
