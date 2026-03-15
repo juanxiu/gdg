@@ -32,6 +32,16 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
+      - name: Enable GCP Services
+        run: |
+          gcloud services enable \
+            cloudfunctions.googleapis.com \
+            run.googleapis.com \
+            cloudbuild.googleapis.com \
+            artifactregistry.googleapis.com \
+            logging.googleapis.com \
+            pubsub.googleapis.com
+
       - name: Build and Push Docker Image
         run: |
           gcloud auth configure-docker asia-northeast3-docker.pkg.dev
