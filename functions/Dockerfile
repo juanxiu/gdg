@@ -17,5 +17,5 @@ COPY . .
 # Port 설정
 EXPOSE 8080
 
-# 실행 명령 (Cloud Run은 PORT 환경변수를 제공합니다. 이를 위해 Shell 형식을 사용하여 변수를 확장합니다.)
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
+# 실행 명령 (Cloud Run이 환경 변수로 제공하는 PORT를 사용합니다)
+CMD exec uvicorn main:app --host 0.0.0.0 --port $PORT

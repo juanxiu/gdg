@@ -1,12 +1,25 @@
-from app import create_app
+import os
+import sys
+import logging
+import traceback
 
-app = create_app()
-print("✅ SafePath API initialized successfully")
+# 로깅 설정 (Cloud Run 로그에서 확인 가능)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("startup")
 
-# 로컬 개발 및 Cloud Run 실행용
+try:
+    from app import create_app
+    app = create_app()
+    logger.info("✅ SafePath API initialized successfully")
+except Exception as e:
+    logger.error("❌ Critical Error during SafePath API initialization")
+    logger.error(traceback.format_exc())
+    sys.stderr.write(traceback.format_exc())
+    sys.exit(1)
+
+# 로컬 실행용 (python main.py 호출 시)
 if __name__ == "__main__":
     import uvicorn
-    import os
     port = int(os.environ.get("PORT", 8080))
-    print(f"🚀 SafePath API starting on port {port}")
-    uvicorn.run("main:app", host="0.0.0.0", port=port)
+    logger.info(f"🚀 Starting local server on port {port}")
+    uvicorn.run(app, host="0.0.0.0", port=port)
