@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     # Google Maps API
     google_maps_api_key: str = ""
 
+    # Firebase Web API Key (for sign-in/sign-up REST APIs)
+    firebase_web_api_key: str = ""
+   
+
     # Firestore
     firestore_collection_prefix: str = ""  # 환경별 분리: "dev_", "prod_"
     firestore_database_id: str = "(default)"
