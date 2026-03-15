@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import traceback
 import logging
 from app.config import get_settings
@@ -58,6 +59,15 @@ def create_app() -> FastAPI:
             {"name": "Search", "description": "장소 검색 및 자동완성"},
             {"name": "Navigation", "description": "실시간 WebSocket 내비게이션"},
         ],
+    )
+
+    # CORS 미들웨어 설정
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     # 라우터 등록
