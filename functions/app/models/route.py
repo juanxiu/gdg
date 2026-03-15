@@ -8,18 +8,18 @@ from app.models.common import LatLng, RiskLevel, TravelMode, HazardType
 
 class SegmentEnvironment(BaseModel):
     """세그먼트별 환경 데이터"""
-    aqi: int = Field(..., ge=0, description="대기질 지수")
-    pm25: float = Field(..., ge=0, description="PM2.5 (μg/m³)")
-    pm10: float = Field(..., ge=0, description="PM10 (μg/m³)")
-    no2: float = Field(..., ge=0, description="NO2 (ppb)")
-    o3: float = Field(..., ge=0, description="O3 (ppb)")
-    temperature: float = Field(..., description="기온 (°C)")
-    feelsLike: float = Field(..., description="체감온도 (°C)")
-    humidity: int = Field(..., ge=0, le=100, description="습도 (%)")
-    pollenLevel: int = Field(..., ge=0, le=5, description="꽃가루 레벨 (0~5)")
+    aqi: int = Field(0, ge=0, description="대기질 지수")
+    pm25: float = Field(0.0, ge=0, description="PM2.5 (μg/m³)")
+    pm10: float = Field(0.0, ge=0, description="PM10 (μg/m³)")
+    no2: float = Field(0.0, ge=0, description="NO2 (ppb)")
+    o3: float = Field(0.0, ge=0, description="O3 (ppb)")
+    temperature: float = Field(20.0, description="기온 (°C)")
+    feelsLike: float = Field(20.0, description="체감온도 (°C)")
+    humidity: int = Field(50, ge=0, le=100, description="습도 (%)")
+    pollenLevel: int = Field(0, ge=0, le=5, description="꽃가루 레벨 (0~5)")
     pollenTypes: List[str] = Field(default_factory=list, description="꽃가루 종류")
-    shadeRatio: float = Field(..., ge=0, le=1, description="그늘 비율 (0~1)")
-    slope: float = Field(..., ge=0, description="경사도 (%)")
+    shadeRatio: float = Field(0.0, ge=0, le=1, description="그늘 비율 (0~1)")
+    slope: float = Field(0.0, ge=0, description="경사도 (%)")
 
 
 class RouteSegment(BaseModel):

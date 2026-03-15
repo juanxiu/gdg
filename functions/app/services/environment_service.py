@@ -81,8 +81,12 @@ class EnvironmentService:
             # API 에러 시 기본값 반환 (로그 남기기 필요)
             print(f"Error fetching real-time data: {e}")
             return {
+                "gridId": grid_id,
+                "lat": lat,
+                "lng": lng,
                 "aqi": 0, "pm25": 0.0, "pm10": 0.0, "no2": 0.0, "o3": 0.0,
-                "pollenLevel": 0, "temperature": 20.0, "expiresAt": None
+                "pollenLevel": 0, "temperature": 20.0, "feelsLike": 20.0,
+                "humidity": 50, "shadeRatio": 0.0, "slope": 0.0
             }
 
     async def get_current(self, lat: float, lng: float) -> CurrentEnvironmentResponse:

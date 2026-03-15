@@ -126,11 +126,14 @@ class MapsClient:
             start_loc = step["startLocation"]["latLng"]
             end_loc = step["endLocation"]["latLng"]
             
+            # Google Routes API v2는 때때로 duration 대신 staticDuration을 반환함
+            duration_str = step.get("duration") or step.get("staticDuration") or "0s"
+            
             segments.append({
                 "startLatLng": LatLng(lat=start_loc["latitude"], lng=start_loc["longitude"]),
                 "endLatLng": LatLng(lat=end_loc["latitude"], lng=end_loc["longitude"]),
                 "distance": step["distanceMeters"],
-                "duration": int(step["duration"].replace("s", "")),
+                "duration": int(duration_str.replace("s", "")),
                 "instruction": step.get("navigationInstruction", {}).get("instructions", "")
             })
             
