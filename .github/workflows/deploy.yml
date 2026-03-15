@@ -32,7 +32,7 @@ jobs:
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@v2
 
-       - name: Enable GCP Services
+      - name: Enable GCP Services
         run: |
           gcloud services enable \
             cloudfunctions.googleapis.com \
