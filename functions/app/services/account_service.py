@@ -11,7 +11,7 @@ class AccountService:
         # Initialize Firebase Admin SDK if not already initialized
         if not firebase_admin._apps:
             firebase_admin.initialize_app()
-        self.db = firestore.client()
+        self.db = firestore.client(database_id=self.settings.firestore_database_id)
 
     async def signup(self, request: SignupRequest) -> AuthResponse:
         """Firebase Admin SDK를 사용하여 계정을 생성합니다."""

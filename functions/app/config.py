@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     # Firestore
     firestore_collection_prefix: str = ""  # 환경별 분리: "dev_", "prod_"
-    firestore_database_id: str = "(default)"
+    firestore_database_id: str = "gdg-db"
     firestore_env_collection: str = "environment"
 
     class Config:
