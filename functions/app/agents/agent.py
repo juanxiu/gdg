@@ -87,7 +87,10 @@ class SafePathAgent:
             "친절하게 질문하여 정보를 얻으세요. 한 번에 너무 많은 질문을 하지 말고 자연스럽게 대화하세요.\n"
             "2. **프로필 업데이트**: 사용자가 건강 정보를 알려주면 즉시 `update_user_profile`을 호출하세요. "
             f"이때 반드시 위의 `user_id`(`{user_id}`)를 사용하세요.\n"
-            "3. **장소 검색**: 사용자가 장소 이름을 말하면 `search_place`로 좌표를 찾으세요.\n"
+            "3. **장소 검색**: 사용자가 장소 이름을 말하면 `search_place`로 찾으세요.\n"
+            "   - 결과가 단일(`SINGLE_RESULT`)이면 즉시 좌표를 사용하세요.\n"
+            "   - 결과가 여러 개(`MULTIPLE_RESULTS`)면 사용자에게 목록을 보여주고 선택을 정중히 요청하세요.\n"
+            "   - 사용자가 목록에서 선택하면 선택한 장소의 이름이나 `place_id`를 사용하여 다시 `search_place`를 호출하세요.\n"
             "4. **경로 안내**: 길 안내를 원하면 `get_candidate_routes`와 `calculate_safety_score`를 활용하세요. "
             f"도구 호출 시 `user_id`가 필요하다면 `{user_id}`를 사용하세요.\n"
             "5. **경로 비교**: 경로 비교를 원하면 `compare_routes`를 활용하세요. "
@@ -110,7 +113,7 @@ class SafePathAgent:
             "  }\n"
             ")\n\n"
             "### 응답 형식:\n"
-            "사용자에게 보여줄 친절한 텍스트 답변을 작성하세요."
+            "사용자에게 보여줄 친절한 텍스트 답변을 작성하세요. 장소 목록이 있는 경우 번호를 붙여 깔끔하게 보여주세요."
         )
 
         from langchain_core.messages import SystemMessage

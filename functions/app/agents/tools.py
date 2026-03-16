@@ -22,15 +22,18 @@ async def get_candidate_routes(origin_lat: float, origin_lng: float, dest_lat: f
             LatLng(lat=dest_lat, lng=dest_lng),
             options
         )
-        # 에이전트가 처리하기 쉽게 세그먼트 정보도 포함하여 반환
+        # 에이전트가 처리하기 쉽게 세그먼트 정보도 포함하여 반환 (응답 과부하 방지를 위해 최대 50개로 제한)
         results = []
         for r in routes:
             segments = client.split_route_into_segments(r)
+            is_truncated = len(segments) > 50
             results.append({
                 "polyline": r["polyline"],
                 "totalDistance": r["totalDistance"],
                 "totalDuration": r["totalDuration"],
-                "segments": segments
+                "segments": segments[:50],
+                "is_truncated": is_truncated,
+                "message": "경로가 너무 길어 앞부분 50개 세그먼트만 반환되었습니다." if is_truncated else ""
             })
         return results
     except Exception as e:
@@ -137,33 +140,49 @@ async def compare_routes(user_id: str, origin_lat: float, origin_lng: float, des
         return {"error": str(e)}
 
 @tool
-async def search_place(query: str) -> Dict[str, Any]:
-    """장소 이름이나 주소로 검색하여 좌표(위도, 경도)를 포함한 장소 정보를 반환합니다.
-    예: '강남역', '이화여대 정문', '서울시청' 등으로 검색 가능합니다."""
+async def search_place(query: str, place_id: Optional[str] = None) -> Dict[str, Any]:
+    """장소 이름이나 주소로 검색하여 장소 목록이나 특정 장소의 좌표를 반환합니다.
+    - query: 검색어 (예: '강남역')
+    - place_id: 특정 장소의 Google Place ID (이미 목록에서 선택한 경우 사용)"""
     client = MapsClient()
     try:
-        # 1. 자동완성으로 후보 검색
+        # 1. place_id가 있으면 바로 상세 정보 조회
+        if place_id:
+            details = await client.get_place_details(place_id)
+            if details:
+                return {
+                    "type": "SINGLE_RESULT",
+                    "name": details.get("name"),
+                    "address": details.get("address"),
+                    "lat": details.get("lat"),
+                    "lng": details.get("lng"),
+                    "placeId": place_id
+                }
+        
+        # 2. 자동완성으로 후보 검색
         predictions = await client.autocomplete(query)
         if not predictions:
             return {"error": f"'{query}'에 대한 검색 결과가 없습니다."}
         
-        # 2. 첫 번째 결과의 상세 정보 조회 (좌표 포함)
-        place_id = predictions[0].get("placeId") or predictions[0].get("place_id")
-        if not place_id:
-            return {"results": predictions, "message": "좌표를 가져오려면 place_id가 필요합니다."}
+        # 결과가 1개뿐이거나 검색어가 매우 구체적일 경우 바로 상세 정보 조회
+        if len(predictions) == 1:
+            place_id = predictions[0].get("place_id")
+            details = await client.get_place_details(place_id)
+            if details:
+                return {
+                    "type": "SINGLE_RESULT",
+                    "name": details.get("name"),
+                    "address": details.get("address"),
+                    "lat": details.get("lat"),
+                    "lng": details.get("lng"),
+                    "placeId": place_id
+                }
         
-        details = await client.get_place_details(place_id)
-        if details:
-            return {
-                "name": details.get("name"),
-                "address": details.get("address"),
-                "lat": details.get("lat"),
-                "lng": details.get("lng"),
-                "placeId": place_id
-            }
-        
-        # 상세 조회 실패 시 자동완성 결과라도 반환
-        return {"results": predictions}
+        # 여러 결과가 있으면 목록 반환
+        return {
+            "type": "MULTIPLE_RESULTS",
+            "predictions": predictions
+        }
     except Exception as e:
         logger.error(f"Error in search_place tool: {e}")
         return {"error": str(e)}

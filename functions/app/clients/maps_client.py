@@ -104,7 +104,7 @@ class MapsClient:
                 self.routes_url, 
                 json=payload, 
                 headers=headers,
-                timeout=20.0
+                timeout=60.0
             )
             if response.status_code != 200:
                 print(f"Error from Routes API: {response.text}")
