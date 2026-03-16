@@ -72,6 +72,17 @@ class ProfileService:
             
         return ProfileResponse(**data)
 
+    async def get_by_user_id(self, user_id: str) -> Optional[ProfileResponse]:
+        """user_id로 프로필 조회 (에이전트용). 없으면 default_profile 자동 생성."""
+        query = self.collection.where("userId", "==", user_id).limit(1)
+        docs = [doc async for doc in query.stream()]
+        
+        if docs:
+            return ProfileResponse(**docs[0].to_dict())
+        
+        # 프로필이 없으면 기본 프로필 자동 생성
+        return await self.get("default_profile", user_id)
+
     async def update(self, profile_id: str, user_id: str, request: ProfileUpdateRequest) -> Optional[ProfileResponse]:
         doc_ref = self.collection.document(profile_id)
         doc = await doc_ref.get()

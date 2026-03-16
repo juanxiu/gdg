@@ -18,7 +18,6 @@ class AgentState(TypedDict):
     """에이전트 공유 상태"""
     messages: Annotated[Sequence[BaseMessage], operator.add]
     user_id: str
-    profile_id: str
 
 class SafePathAgent:
     """SafePath ReAct 에이전트 빌더 및 실행기 (Phase 2: Conversational)"""
@@ -99,13 +98,12 @@ class SafePathAgent:
         response = await self.llm.ainvoke(messages)
         return {"messages": [response]}
 
-    async def run(self, user_id: str, profile_id: str, query: str, thread_id: str = "default"):
+    async def run(self, user_id: str, query: str, thread_id: str = "default"):
         """에이전트 실행 (결과물 요약 및 필요시 데이터 포함)"""
         config = {"configurable": {"thread_id": thread_id}}
         inputs = {
             "messages": [HumanMessage(content=query)],
-            "user_id": user_id,
-            "profile_id": profile_id
+            "user_id": user_id
         }
         
         final_state = await self.app.ainvoke(inputs, config=config)

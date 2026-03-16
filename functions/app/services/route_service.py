@@ -185,7 +185,6 @@ class RouteService:
         
         agent_response = await self.agent.run(
             user_id=user_id,
-            profile_id=request.profile_id,
             query=query
         )
 

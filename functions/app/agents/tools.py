@@ -50,27 +50,30 @@ async def get_environmental_data(locations: List[Dict[str, float]]) -> Dict[str,
         return {}
 
 @tool
-async def get_user_profile(user_id: str, profile_id: str) -> Dict[str, Any]:
-    """사용자의 건강 프로필(천식, 비염 여부 등)을 조회합니다."""
+async def get_user_profile(user_id: str) -> Dict[str, Any]:
+    """사용자의 건강 프로필(천식, 비염 여부 등)을 조회합니다. user_id만 있으면 자동으로 프로필을 찾습니다."""
     service = ProfileService()
-    profile = await service.get(profile_id, user_id)
+    profile = await service.get_by_user_id(user_id)
     if profile:
         return profile.model_dump()
     return {}
 
 @tool
-async def update_user_profile(user_id: str, profile_id: str, conditions_update: Dict[str, Any]) -> str:
+async def update_user_profile(user_id: str, conditions_update: Dict[str, Any]) -> str:
     """사용자의 건강 프로필 정보를 업데이트합니다. 
     conditions_update는 {'respiratory': {'enabled': True, 'severity': 'high'}, 'allergyPollen': {'enabled': True}} 등의 형식입니다."""
     service = ProfileService()
     try:
         from app.models.profile import ProfileUpdateRequest
-        # ProfileUpdateRequest를 통해 유효성 검사 및 업데이트 수행
+        # user_id로 프로필 조회 후 해당 profile_id로 업데이트
+        profile = await service.get_by_user_id(user_id)
+        if not profile:
+            return "프로필을 찾을 수 없습니다. 먼저 프로필을 생성해주세요."
         update_req = ProfileUpdateRequest(conditions=conditions_update)
-        result = await service.update(profile_id, user_id, update_req)
+        result = await service.update(profile.profile_id, user_id, update_req)
         if result:
             return "사용자 프로필이 성공적으로 업데이트되었습니다."
-        return "프로세스 오류: 프로필을 찾을 수 없거나 업데이트 권한이 없습니다."
+        return "프로세스 오류: 프로필 업데이트 권한이 없습니다."
     except Exception as e:
         logger.error(f"Error in update_user_profile tool: {e}")
         return f"업데이트 실패: {str(e)}"
