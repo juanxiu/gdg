@@ -11,6 +11,7 @@ from app.models.route import (
 from app.services.risk_scorer import RiskScorer
 from app.services.profile_service import ProfileService
 from app.services.environment_service import EnvironmentService
+from app.services.llm_service import LLMService
 from app.clients.maps_client import MapsClient
 from app.utils.grid import GridManager
 from app.config import get_settings
@@ -26,6 +27,7 @@ class RouteService:
         self.env_service = EnvironmentService()
         self.maps_client = MapsClient()
         self.risk_scorer = RiskScorer()
+        self.llm_service = LLMService()
         self.settings = get_settings()
         self.db = get_collection("routes") # 경로 저장용 컬렉션
 
@@ -166,14 +168,15 @@ class RouteService:
         # 3. 차이 계산
         dist_diff = safest_path.totalDistance - fastest_path.totalDistance
         dur_diff = safest_path.totalDuration - fastest_path.totalDuration
+        dur_diff = safest_path.totalDuration - fastest_path.totalDuration
         risk_diff = safest_path.healthRiskScore - fastest_path.healthRiskScore # 보통 음수일 것 (안전한게 낮음)
 
-        recommendation = "안전 경로를 권장합니다."
-        reason = f"최단 경로 대비 약 {abs(dur_diff)}초 더 소요되지만, 노출 위험도가 {abs(risk_diff)}점 낮습니다."
-        
-        if safest_path.routeId == fastest_path.routeId:
-            recommendation = "가장 빠른 경로가 가장 안전합니다."
-            reason = "시간과 안전성을 모두 만족하는 최적의 경로입니다."
+        # LLM 기반 추천 사유 생성
+        llm_res = await self.llm_service.generate_route_recommendation(
+            safe_path_data=safest_path.model_dump(),
+            fastest_path_data=fastest_path.model_dump(),
+            profile_data=profile.model_dump() if profile else {}
+        )
 
         return CompareResponse(
             comparison={
@@ -183,8 +186,8 @@ class RouteService:
                     "distanceDiff": dist_diff,
                     "durationDiff": dur_diff,
                     "riskScoreDiff": risk_diff,
-                    "recommendation": recommendation,
-                    "reason": reason
+                    "recommendation": llm_res.recommendation,
+                    "reason": llm_res.reason
                 }
             }
         )
@@ -290,8 +293,18 @@ class RouteService:
                     location=LatLng.model_validate(seg["startLatLng"])
                 ))
 
+        # 5. 위험 감지 시 LLM 기반 맞춤형 알림 메시지 생성
+        alert_message = ""
+        if hazard_detected:
+            llm_alert = await self.llm_service.generate_navigation_alert(
+                hazard_data=[h.model_dump() for h in ahead_hazards][0], # 최우선 위험
+                profile_data=profile.model_dump() if profile else {}
+            )
+            alert_message = llm_alert.message
+
         return LocationUpdateResponse(
             status="HAZARD_AHEAD" if hazard_detected else "ON_ROUTE",
+            message=alert_message,
             currentSegmentId=segments[curr_idx]["segmentId"],
             nextSegmentRisk=segments[curr_idx+1]["riskLevel"] if curr_idx+1 < len(segments) else RiskLevel.SAFE,
             aheadScan=AheadScan(
