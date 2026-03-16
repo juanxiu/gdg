@@ -1,5 +1,5 @@
 import operator
-from typing import Annotated, Sequence, TypedDict, Optional
+from typing import Annotated, Sequence, TypedDict
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage, HumanMessage
 from langgraph.graph import StateGraph, END
