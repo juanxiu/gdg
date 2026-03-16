@@ -1,8 +1,7 @@
 import operator
-from typing import Annotated, Sequence, TypedDict, Union, Dict, Any, List, Optional
+from typing import Annotated, Sequence, TypedDict, Optional
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import BaseMessage, HumanMessage, ToolMessage
-from langchain_core.tools import tool
+from langchain_core.messages import BaseMessage, HumanMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
 from app.config import get_settings
