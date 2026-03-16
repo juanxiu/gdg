@@ -159,8 +159,6 @@ class RouteService:
         if not safe_resp.paths:
             raise HTTPException(status_code=404, detail="No paths available for comparison")
 
-        # 0. 프로필 조회
-        profile = await self.profile_service.get(request.profile_id, user_id)
 
         # 1. 안전성 기준 정렬된 결과 (이미 find_safe_route에서 정렬됨)
         safest_path = safe_resp.paths[0]
