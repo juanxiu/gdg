@@ -118,7 +118,7 @@ class MapsClient:
                 routes.append({
                     "polyline": r["polyline"]["encodedPolyline"],
                     "totalDistance": r["distanceMeters"],
-                    "totalDuration": int(r["duration"].replace("s", "")),
+                    "totalDuration": int(float(r["duration"].replace("s", ""))),
                     "raw_steps": r["legs"][0]["steps"]
                 })
             return routes
@@ -138,7 +138,7 @@ class MapsClient:
                 "startLatLng": LatLng(lat=start_loc["latitude"], lng=start_loc["longitude"]),
                 "endLatLng": LatLng(lat=end_loc["latitude"], lng=end_loc["longitude"]),
                 "distance": step["distanceMeters"],
-                "duration": int(duration_str.replace("s", "")),
+                "duration": int(float(duration_str.replace("s", ""))),
                 "instruction": step.get("navigationInstruction", {}).get("instructions", "")
             })
             

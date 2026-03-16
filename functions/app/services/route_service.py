@@ -35,11 +35,11 @@ class RouteService:
         start_time = time.time()
 
         # 1. 프로필 조회 (userId를 넘겨 소유권 확인)
-        profile = await self.profile_service.get(request.profileId, user_id)
+        profile = await self.profile_service.get(request.profile_id, user_id)
         if not profile:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Profile {request.profileId} not found or access denied"
+                detail=f"Profile {request.profile_id} not found or access denied"
             )
 
         # 2. 가중치 결정
@@ -151,7 +151,7 @@ class RouteService:
         safe_resp = await self.find_safe_route(SafeRouteRequest(
             origin=request.origin,
             destination=request.destination,
-            profileId=request.profileId,
+            profile_id=request.profile_id,
             departureTime=request.departureTime,
             options=request.options
         ), user_id)
@@ -160,7 +160,7 @@ class RouteService:
             raise HTTPException(status_code=404, detail="No paths available for comparison")
 
         # 0. 프로필 조회
-        profile = await self.profile_service.get(request.profileId, user_id)
+        profile = await self.profile_service.get(request.profile_id, user_id)
 
         # 1. 안전성 기준 정렬된 결과 (이미 find_safe_route에서 정렬됨)
         safest_path = safe_resp.paths[0]
@@ -185,7 +185,7 @@ class RouteService:
         
         agent_response = await self.agent.run(
             user_id=user_id,
-            profile_id=request.profileId,
+            profile_id=request.profile_id,
             query=query
         )
 
@@ -227,7 +227,7 @@ class RouteService:
         re_resp = await self.find_safe_route(SafeRouteRequest(
             origin=request.currentLocation,
             destination=request.destination,
-            profileId=request.profileId
+            profile_id=request.profile_id
         ), user_id)
         
         # 첫 번째 경로가 가장 안전한 경로
@@ -281,7 +281,7 @@ class RouteService:
         scan_locations = [LatLng.model_validate(s["startLatLng"]) for s in scan_segments]
         
         # 가중치 획득
-        profile = await self.profile_service.get(request.profileId, user_id)
+        profile = await self.profile_service.get(request.profile_id, user_id)
         weights = self.risk_scorer.resolve_weights(profile.conditions, profile.customWeights) if profile else {}
 
         # 배치 조회
@@ -325,7 +325,7 @@ class RouteService:
             )
             agent_response = await self.agent.run(
                 user_id=user_id,
-                profile_id=request.profileId,
+                profile_id=request.profile_id,
                 query=query
             )
             

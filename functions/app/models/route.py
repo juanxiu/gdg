@@ -65,7 +65,7 @@ class SafeRouteRequest(BaseModel):
     """SafePath 경로 탐색 요청"""
     origin: LatLng = Field(..., description="출발지")
     destination: LatLng = Field(..., description="도착지")
-    profileId: str = Field(..., description="건강 프로필 ID")
+    profile_id: str = Field(..., description="건강 프로필 ID")
     departureTime: Optional[str] = Field(None, description="출발 예정 시간 (ISO 8601)")
     options: RouteOptions = Field(default_factory=RouteOptions)
 
@@ -95,7 +95,7 @@ class CompareRequest(BaseModel):
     """경로 비교 요청"""
     origin: LatLng
     destination: LatLng
-    profileId: str
+    profile_id: str
     departureTime: Optional[str] = None
 
 
@@ -142,7 +142,7 @@ class RerouteRequest(BaseModel):
     currentRouteId: str
     currentLocation: LatLng
     destination: LatLng
-    profileId: str
+    profile_id: str
     hazard: HazardDetail
 
 
@@ -160,7 +160,7 @@ class RerouteResponse(BaseModel):
 class LocationUpdateRequest(BaseModel):
     """실시간 위치 업데이트 요청"""
     routeId: str
-    profileId: str
+    profile_id: str
     location: LatLng
     heading: Optional[float] = Field(None, ge=0, le=360, description="이동 방향 (°)")
     speed: Optional[float] = Field(None, ge=0, description="이동 속도 (m/s)")
