@@ -184,8 +184,9 @@ class AheadScan(BaseModel):
 
 
 class LocationUpdateResponse(BaseModel):
-    """위치 업데이트 응답"""
+    """위치 업데이트 응답원"""
     status: str = Field(..., description="ON_ROUTE / HAZARD_AHEAD / OFF_ROUTE")
+    message: str = Field("", description="LLM 생성 맞춤형 알림 메시지")
     currentSegmentId: str
     nextSegmentRisk: RiskLevel
     aheadScan: AheadScan
