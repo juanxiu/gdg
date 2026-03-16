@@ -59,6 +59,23 @@ async def get_user_profile(user_id: str, profile_id: str) -> Dict[str, Any]:
     return {}
 
 @tool
+async def update_user_profile(user_id: str, profile_id: str, conditions_update: Dict[str, Any]) -> str:
+    """사용자의 건강 프로필 정보를 업데이트합니다. 
+    conditions_update는 {'respiratory': {'enabled': True, 'severity': 'high'}, 'allergyPollen': {'enabled': True}} 등의 형식입니다."""
+    service = ProfileService()
+    try:
+        from app.models.profile import ProfileUpdateRequest
+        # ProfileUpdateRequest를 통해 유효성 검사 및 업데이트 수행
+        update_req = ProfileUpdateRequest(conditions=conditions_update)
+        result = await service.update(profile_id, user_id, update_req)
+        if result:
+            return "사용자 프로필이 성공적으로 업데이트되었습니다."
+        return "프로세스 오류: 프로필을 찾을 수 없거나 업데이트 권한이 없습니다."
+    except Exception as e:
+        logger.error(f"Error in update_user_profile tool: {e}")
+        return f"업데이트 실패: {str(e)}"
+
+@tool
 def calculate_safety_score(environment_data: Dict[str, Any], profile_conditions: List[str]) -> Dict[str, Any]:
     """환경 데이터와 사용자의 건강 조건을 바탕으로 해당 지점의 위험 점수(0~100)와 등급을 계산합니다."""
     scorer = RiskScorer()

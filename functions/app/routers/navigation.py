@@ -89,16 +89,19 @@ async def navigation_websocket(
             try:
                 # 클라이언트로부터 실시간 위치 및 데이터 수신
                 data = await websocket.receive_text()
-                message = json.loads(data)
-                
-                if "location" in message:
+                try:
+                    message = json.loads(data)
+                except json.JSONDecodeError:
+                    message = data # JSON이 아니면 일반 문자열로 처리
+
+                if isinstance(message, dict) and "location" in message:
                     update_req = LocationUpdateRequest(
                         routeId=routeId,
                         profileId=message.get("profileId", "default"),
                         location=LatLng(**message["location"])
                     )
                     
-                    # 실시간 전방 위험 스캔
+                    # 실시간 전방 위험 스캔 (routeId를 thread_id로 사용)
                     response = await service.process_location_update(update_req, user_id=user_id)
                     
                     # 결과 즉시 전송
@@ -112,10 +115,22 @@ async def navigation_websocket(
                             "severity": "WARNING",
                             "aheadScan": response.aheadScan.model_dump()
                         }, websocket)
+                elif isinstance(message, str) or (isinstance(message, dict) and "chat" in message):
+                    # 사용자의 직접적인 채팅 메시지 처리 (프로필 답변 등)
+                    chat_query = message if isinstance(message, str) else message["chat"]
+                    from app.agents.agent import get_agent
+                    agent = get_agent()
+                    # thread_id를 routeId로 고정하여 대화 유지
+                    agent_res = await agent.run(user_id=user_id, profile_id="default", query=chat_query, thread_id=routeId)
+                    
+                    await manager.send_personal_message({
+                        "type": "CHAT_RESPONSE",
+                        "message": agent_res
+                    }, websocket)
                 else:
                     await manager.send_personal_message({
                         "type": "ERROR",
-                        "message": "잘못된 데이터 형식입니다. 'location' 필드가 필요합니다."
+                        "message": "잘못된 데이터 형식입니다. 'location' 또는 'chat' 필드가 필요합니다."
                     }, websocket)
 
             except json.JSONDecodeError:

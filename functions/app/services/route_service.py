@@ -11,7 +11,7 @@ from app.models.route import (
 from app.services.risk_scorer import RiskScorer
 from app.services.profile_service import ProfileService
 from app.services.environment_service import EnvironmentService
-from app.agents.agent import SafePathAgent
+from app.agents.agent import get_agent
 from app.clients.maps_client import MapsClient
 from app.utils.grid import GridManager
 from app.config import get_settings
@@ -27,7 +27,7 @@ class RouteService:
         self.env_service = EnvironmentService()
         self.maps_client = MapsClient()
         self.risk_scorer = RiskScorer()
-        self.agent = SafePathAgent()
+        self.agent = get_agent()
         self.settings = get_settings()
         self.db = get_collection("routes") # 경로 저장용 컬렉션
 
