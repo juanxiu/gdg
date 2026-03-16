@@ -12,8 +12,8 @@ logger = logging.getLogger("uvicorn")
 
 @tool
 async def get_candidate_routes(origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float, travel_mode: str = "WALK") -> List[Dict[str, Any]]:
-    """Google Maps를 사용하여 두 지점 사이의 후보 경로를 검색합니다. 
-    travel_mode는 'WALK', 'BICYCLE', 'TRANSIT', 'DRIVE' 중 하나여야 합니다."""
+    """Search for candidate routes between two points using Google Maps.
+    - travel_mode: Select from 'WALK', 'BICYCLE', 'TRANSIT', 'DRIVE'. Defaults to 'WALK'."""
     client = MapsClient()
     options = RouteOptions(travelMode=TravelMode(travel_mode))
     try:
@@ -22,7 +22,7 @@ async def get_candidate_routes(origin_lat: float, origin_lng: float, dest_lat: f
             LatLng(lat=dest_lat, lng=dest_lng),
             options
         )
-        # 에이전트가 처리하기 쉽게 세그먼트 정보도 포함하여 반환 (응답 과부하 방지를 위해 최대 50개로 제한)
+        # Return segment information for easier processing by the agent (limited to 50 segments to avoid overload)
         results = []
         for r in routes:
             segments = client.split_route_into_segments(r)
@@ -33,7 +33,7 @@ async def get_candidate_routes(origin_lat: float, origin_lng: float, dest_lat: f
                 "totalDuration": r["totalDuration"],
                 "segments": segments[:50],
                 "is_truncated": is_truncated,
-                "message": "경로가 너무 길어 앞부분 50개 세그먼트만 반환되었습니다." if is_truncated else ""
+                "message": "Route is too long; only the first 50 segments are returned." if is_truncated else ""
             })
         return results
     except Exception as e:
@@ -42,8 +42,8 @@ async def get_candidate_routes(origin_lat: float, origin_lng: float, dest_lat: f
 
 @tool
 async def get_environmental_data(locations: List[Dict[str, float]]) -> Dict[str, Any]:
-    """지정된 위치들의 미세먼지(AQI), 꽃가루 농도 등 환경 데이터를 조회합니다.
-    입력은 [{'lat': 37.5, 'lng': 127.0}, ...] 형식의 리스트입니다."""
+    """Retrieve environmental data such as air quality (AQI) and pollen levels for specified locations.
+    - locations: A list of dicts like [{'lat': 37.5, 'lng': 127.0}, ...]."""
     service = EnvironmentService()
     try:
         latlngs = [LatLng(lat=loc['lat'], lng=loc['lng']) for loc in locations]
@@ -54,7 +54,7 @@ async def get_environmental_data(locations: List[Dict[str, float]]) -> Dict[str,
 
 @tool
 async def get_user_profile(user_id: str) -> Dict[str, Any]:
-    """사용자의 건강 프로필(천식, 비염 여부 등)을 조회합니다. user_id만 있으면 자동으로 프로필을 찾습니다."""
+    """Retrieve the user's health profile (respiratory issues, allergies, etc.) using their user_id."""
     service = ProfileService()
     profile = await service.get_by_user_id(user_id)
     if profile:
@@ -63,23 +63,22 @@ async def get_user_profile(user_id: str) -> Dict[str, Any]:
 
 @tool
 async def update_user_profile(user_id: str, conditions_update: Dict[str, Any]) -> str:
-    """사용자의 건강 프로필 정보를 업데이트합니다.
-    conditions_update에는 변경할 항목만 포함합니다. 가능한 키:
-    - respiratory: 호흡기 질환 (천식, COPD, 비염 등)
-    - cardiovascular: 심혈관 질환
-    - heatVulnerable: 온열 질환 취약
-    - allergyPollen: 꽃가루 알레르기
-    각 항목의 형식: {"enabled": true/false, "severity": "low"/"medium"/"high"}
-    예시: {"allergyPollen": {"enabled": true, "severity": "high"}, "respiratory": {"enabled": true, "severity": "low"}}"""
+    """Update the user's health profile conditions.
+    - conditions_update: A dict containing only the fields to update. Available keys:
+        - respiratory: Respiratory diseases (Asthma, COPD, Rhinitis, etc.)
+        - cardiovascular: Cardiovascular diseases (Hypertension, Heart disease, etc.)
+        - heatVulnerable: Vulnerability to heat (Heatstroke, etc.)
+        - allergyPollen: Pollen allergy
+    - Format: {"enabled": bool, "severity": "low"|"medium"|"high"}
+    Example: {"allergyPollen": {"enabled": True, "severity": "high"}}"""
     service = ProfileService()
     try:
         from app.models.profile import ProfileUpdateRequest
-        # user_id로 프로필 조회 후 해당 profile_id로 업데이트
         profile = await service.get_by_user_id(user_id)
         if not profile:
-            return "프로필을 찾을 수 없습니다. 먼저 프로필을 생성해주세요."
+            return "Profile not found. Please create a profile first."
         
-        # 기존 프로필의 conditions를 가져와서 변경할 항목만 머지
+        # Merge updates with existing conditions
         existing_conditions = profile.conditions.model_dump()
         for key, value in conditions_update.items():
             if key in existing_conditions:
@@ -88,19 +87,18 @@ async def update_user_profile(user_id: str, conditions_update: Dict[str, Any]) -
         update_req = ProfileUpdateRequest(conditions=existing_conditions)
         result = await service.update(profile.profile_id, user_id, update_req)
         if result:
-            return f"사용자 프로필이 성공적으로 업데이트되었습니다. 업데이트된 항목: {list(conditions_update.keys())}"
-        return "프로세스 오류: 프로필 업데이트 권한이 없습니다."
+            return f"User profile updated successfully. Updated fields: {list(conditions_update.keys())}"
+        return "Process error: Permission denied for profile update."
     except Exception as e:
         logger.error(f"Error in update_user_profile tool: {e}")
-        return f"업데이트 실패: {str(e)}"
+        return f"Update failed: {str(e)}"
 
 @tool
 def calculate_safety_score(environment_data: Dict[str, Any], profile_conditions: List[str]) -> Dict[str, Any]:
-    """환경 데이터와 사용자의 건강 조건을 바탕으로 해당 지점의 위험 점수(0~100)와 등급을 계산합니다."""
+    """Calculate the health risk score (0-100) and risk level for a location based on environmental data and user conditions."""
     scorer = RiskScorer()
     weights = scorer.resolve_weights(profile_conditions, {})
     
-    # 환경 데이터가 dict 형태이므로 SegmentEnvironment 모델로 변환 시도
     from app.models.route import SegmentEnvironment
     try:
         env = SegmentEnvironment(**environment_data)
@@ -113,8 +111,8 @@ def calculate_safety_score(environment_data: Dict[str, Any], profile_conditions:
 
 @tool
 async def compare_routes(user_id: str, origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float, travel_mode: str = "WALK") -> Dict[str, Any]:
-    """출발지와 도착지 사이의 최단 경로와 안전 경로를 비교 분석합니다.
-    거리, 시간, 건강 위험 점수 차이를 포함한 비교 결과를 반환합니다."""
+    """Compare the fastest route and the safest route between two points. 
+    Returns distance, duration, and health risk score differences."""
     from app.services.route_service import RouteService
     from app.models.route import CompareRequest
     
@@ -122,10 +120,9 @@ async def compare_routes(user_id: str, origin_lat: float, origin_lng: float, des
         service = RouteService()
         profile_service = ProfileService()
         
-        # user_id로 프로필 조회
         profile = await profile_service.get_by_user_id(user_id)
         if not profile:
-            return {"error": "프로필을 찾을 수 없습니다. 먼저 프로필을 생성해주세요."}
+            return {"error": "Profile not found. Please create a profile first."}
         
         request = CompareRequest(
             origin=LatLng(lat=origin_lat, lng=origin_lng),
@@ -141,12 +138,11 @@ async def compare_routes(user_id: str, origin_lat: float, origin_lng: float, des
 
 @tool
 async def search_place(query: str, place_id: Optional[str] = None) -> Dict[str, Any]:
-    """장소 이름이나 주소로 검색하여 장소 목록이나 특정 장소의 좌표를 반환합니다.
-    - query: 검색어 (예: '강남역')
-    - place_id: 특정 장소의 Google Place ID (이미 목록에서 선택한 경우 사용)"""
+    """Search for a place by name/address or retrieve details for a specific Google Place ID.
+    - query: Search string (e.g., 'Gangnam Station')
+    - place_id: Specific Google Place ID (if selected from a candidate list)"""
     client = MapsClient()
     try:
-        # 1. place_id가 있으면 바로 상세 정보 조회
         if place_id:
             details = await client.get_place_details(place_id)
             if details:
@@ -159,12 +155,10 @@ async def search_place(query: str, place_id: Optional[str] = None) -> Dict[str, 
                     "placeId": place_id
                 }
         
-        # 2. 자동완성으로 후보 검색
         predictions = await client.autocomplete(query)
         if not predictions:
-            return {"error": f"'{query}'에 대한 검색 결과가 없습니다."}
+            return {"error": f"No results found for '{query}'."}
         
-        # 결과가 1개뿐이거나 검색어가 매우 구체적일 경우 바로 상세 정보 조회
         if len(predictions) == 1:
             place_id = predictions[0].get("place_id")
             details = await client.get_place_details(place_id)
@@ -178,7 +172,6 @@ async def search_place(query: str, place_id: Optional[str] = None) -> Dict[str, 
                     "placeId": place_id
                 }
         
-        # 여러 결과가 있으면 목록 반환
         return {
             "type": "MULTIPLE_RESULTS",
             "predictions": predictions
