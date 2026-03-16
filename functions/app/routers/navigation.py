@@ -108,7 +108,7 @@ async def navigation_websocket(
                     if response.rerouteRecommended:
                         await manager.send_personal_message({
                             "type": "SYSTEM_ALERT",
-                            "message": "전방에 위험 구역이 감지되었습니다. 경로 재탐색을 권장합니다.",
+                            "message": response.message or "전방에 위험 구역이 감지되었습니다. 경로 재탐색을 권장합니다.",
                             "severity": "WARNING",
                             "aheadScan": response.aheadScan.model_dump()
                         }, websocket)
