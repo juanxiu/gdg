@@ -18,6 +18,9 @@ class Settings(BaseSettings):
 
     # Firebase Web API Key (for sign-in/sign-up REST APIs)
     firebase_web_api_key: str = ""
+
+    # Google Gemini API Key
+    google_api_key: str = ""
    
 
     # Firestore
