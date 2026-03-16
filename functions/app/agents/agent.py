@@ -8,7 +8,8 @@ from app.config import get_settings
 from langgraph.checkpoint.memory import MemorySaver
 from app.agents.tools import (
     get_candidate_routes, get_environmental_data, 
-    get_user_profile, calculate_safety_score, update_user_profile
+    get_user_profile, calculate_safety_score, update_user_profile,
+    compare_routes
 )
 import logging
 
@@ -26,7 +27,8 @@ class SafePathAgent:
         settings = get_settings()
         self.tools = [
             get_candidate_routes, get_environmental_data, 
-            get_user_profile, calculate_safety_score, update_user_profile
+            get_user_profile, calculate_safety_score, update_user_profile,
+            compare_routes
         ]
         self.tool_node = ToolNode(self.tools)
         

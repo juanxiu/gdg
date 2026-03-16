@@ -94,3 +94,31 @@ def calculate_safety_score(environment_data: Dict[str, Any], profile_conditions:
     except Exception as e:
         logger.error(f"Error in calculate_safety_score tool: {e}")
         return {"score": 0, "level": "UNKNOWN"}
+
+@tool
+async def compare_routes(user_id: str, origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float, travel_mode: str = "WALK") -> Dict[str, Any]:
+    """출발지와 도착지 사이의 최단 경로와 안전 경로를 비교 분석합니다.
+    거리, 시간, 건강 위험 점수 차이를 포함한 비교 결과를 반환합니다."""
+    from app.services.route_service import RouteService
+    from app.models.route import CompareRequest
+    
+    try:
+        service = RouteService()
+        profile_service = ProfileService()
+        
+        # user_id로 프로필 조회
+        profile = await profile_service.get_by_user_id(user_id)
+        if not profile:
+            return {"error": "프로필을 찾을 수 없습니다. 먼저 프로필을 생성해주세요."}
+        
+        request = CompareRequest(
+            origin=LatLng(lat=origin_lat, lng=origin_lng),
+            destination=LatLng(lat=dest_lat, lng=dest_lng),
+            profile_id=profile.profile_id,
+        )
+        
+        result = await service.compare_routes(request, user_id)
+        return result.model_dump()
+    except Exception as e:
+        logger.error(f"Error in compare_routes tool: {e}")
+        return {"error": str(e)}
