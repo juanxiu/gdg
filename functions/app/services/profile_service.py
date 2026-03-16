@@ -25,7 +25,7 @@ class ProfileService:
         )
 
         profile_data = {
-            "profileId": profile_id,
+            "profile_id": profile_id,
             "userId": user_id,
             "displayName": request.displayName,
             "age": request.age,
@@ -39,13 +39,30 @@ class ProfileService:
         await self.collection.document(profile_id).set(profile_data)
         
         return {
-            "profileId": profile_id,
+            "profile_id": profile_id,
             "autoWeights": auto_weights
         }
 
     async def get(self, profile_id: str, user_id: str = None) -> Optional[ProfileResponse]:
         doc = await self.collection.document(profile_id).get()
+        
+        # 만약 'default_profile'을 요청했는데 없으면 자동 생성 (UX 개선)
         if not doc.exists:
+            if profile_id == "default_profile" and user_id:
+                from app.models.profile import HealthConditions, CustomWeights
+                
+                default_data = {
+                    "profile_id": "default_profile",
+                    "userId": user_id,
+                    "displayName": "기본 사용자",
+                    "age": 70, # 기본 어르신 타겟
+                    "conditions": HealthConditions().model_dump(),
+                    "customWeights": CustomWeights().model_dump(),
+                    "createdAt": datetime.utcnow(),
+                    "updatedAt": datetime.utcnow()
+                }
+                await self.collection.document("default_profile").set(default_data)
+                return ProfileResponse(**default_data)
             return None
         
         data = doc.to_dict()

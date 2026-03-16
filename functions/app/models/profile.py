@@ -52,7 +52,7 @@ class ProfileUpdateRequest(BaseModel):
 
 class ProfileResponse(BaseModel):
     """건강 프로필 응답"""
-    profileId: str
+    profile_id: str
     userId: str
     displayName: str
     age: int
@@ -65,6 +65,6 @@ class ProfileResponse(BaseModel):
 
 class ProfileCreateResponse(BaseModel):
     """프로필 생성 응답"""
-    profileId: str
+    profile_id: str
     message: str = "건강 프로필이 생성되었습니다."
     autoWeights: CustomWeights
