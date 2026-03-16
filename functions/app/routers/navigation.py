@@ -38,23 +38,23 @@ async def authenticate_websocket(websocket: WebSocket, token: str) -> dict:
 
 class ConnectionManager:
     def __init__(self):
-        # routeId -> WebSocket 매핑
+        # user_id -> WebSocket 매핑
         self.active_connections: dict[str, WebSocket] = {}
 
-    async def connect(self, routeId: str, websocket: WebSocket):
+    async def connect(self, user_id: str, websocket: WebSocket):
         await websocket.accept()
         # 기존 연결이 있다면 정리 (중복 연결 방지)
-        if routeId in self.active_connections:
+        if user_id in self.active_connections:
             try:
-                await self.active_connections[routeId].close(code=status.WS_1008_POLICY_VIOLATION)
+                await self.active_connections[user_id].close(code=status.WS_1008_POLICY_VIOLATION)
             except Exception:
                 pass
-        self.active_connections[routeId] = websocket
+        self.active_connections[user_id] = websocket
 
-    def disconnect(self, routeId: str):
-        if routeId in self.active_connections:
-            del self.active_connections[routeId]
-            logger.info(f"Connection for route {routeId} removed from manager")
+    def disconnect(self, user_id: str):
+        if user_id in self.active_connections:
+            del self.active_connections[user_id]
+            logger.info(f"Connection for user {user_id} removed from manager")
 
     async def send_personal_message(self, message: dict, websocket: WebSocket):
         try:
@@ -64,24 +64,23 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-@router.get("/ws/{routeId}", summary="[WebSocket] 실시간 내비게이션 및 채팅 연결 가이드", description=(
+@router.get("/ws", summary="[WebSocket] 실시간 내비게이션 및 채팅 연결 가이드", description=(
     "**이 엔드포인트는 WebSocket 프로토콜(wss://) 전용 가이드입니다.**\n\n"
     "### 1. 연결 방법\n"
-    "`wss://{domain}/api/navigation/ws/{routeId}?token={Firebase_ID_Token}`\n\n"
+    "`wss://{domain}/api/navigation/ws?token={Firebase_ID_Token}`\n\n"
     "### 2. 메시지 규격 (Client -> Server)\n"
-    "- **위치 업데이트**: `{\"location\": {\"lat\": 37.5, \"lng\": 127.0}, \"profileId\": \"default\"}`\n"
-    "- **채팅/질문**: `{\"chat\": \"강남역 가는 길 알려줘\", \"profileId\": \"default\"}`\n\n"
+    "- **채팅/질문**: `{\"chat\": \"강남역 가는 길 알려줘\"}` 또는 일반 텍스트\n"
+    "- **위치 업데이트**: `{\"location\": {\"lat\": 37.5, \"lng\": 127.0}, \"routeId\": \"route_abc123\"}`\n\n"
     "### 3. 메시지 규격 (Server -> Client)\n"
     "- **에이전트 답변**: `{\"type\": \"CHAT_RESPONSE\", \"message\": \"...\", \"data\": { ... }}`\n"
     "- **위험 알림**: `{\"type\": \"SYSTEM_ALERT\", \"severity\": \"WARNING\", ...}`"
 ))
-async def websocket_documentation(routeId: str, token: str = Query(..., description="Firebase ID Token")):
+async def websocket_documentation(token: str = Query(..., description="Firebase ID Token")):
     return {"message": "WebSocket 전용 엔드포인트입니다. 안내된 wss:// 프로토콜로 연결하세요."}
 
-@router.websocket("/ws/{routeId}")
+@router.websocket("/ws")
 async def navigation_websocket(
     websocket: WebSocket, 
-    routeId: str,
     token: str = Query(None)
 ):
     # 1. 인증 확인
@@ -90,9 +89,9 @@ async def navigation_websocket(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await manager.connect(routeId, websocket)
-    service = RouteService()
     user_id = user_info["uid"]
+    await manager.connect(user_id, websocket)
+    service = RouteService()
     
     try:
         while True:
@@ -105,13 +104,22 @@ async def navigation_websocket(
                     message = data # JSON이 아니면 일반 문자열로 처리
 
                 if isinstance(message, dict) and "location" in message:
+                    # 위치 업데이트 시 routeId는 메시지 본문에서 가져옴
+                    route_id = message.get("routeId")
+                    if not route_id:
+                        await manager.send_personal_message({
+                            "type": "ERROR",
+                            "message": "위치 업데이트에는 'routeId' 필드가 필요합니다."
+                        }, websocket)
+                        continue
+
                     update_req = LocationUpdateRequest(
-                        routeId=routeId,
-                        profile_id=message.get("profile_id", "default"),
+                        routeId=route_id,
+                        profile_id="default",
                         location=LatLng(**message["location"])
                     )
                     
-                    # 실시간 전방 위험 스캔 (routeId를 thread_id로 사용)
+                    # 실시간 전방 위험 스캔
                     response = await service.process_location_update(update_req, user_id=user_id)
                     
                     # 결과 즉시 전송
@@ -132,16 +140,14 @@ async def navigation_websocket(
                     from app.agents.agent import get_agent
                     agent = get_agent()
                     
-                    # thread_id를 routeId로 고정하여 대화 문맥 유지
-                    # profile_id는 실제 유저 프로필 시스템에 맞춰 "default" 또는 실제 ID 사용
+                    # thread_id를 user_id로 고정하여 대화 문맥 유지
                     agent_res = await agent.run(
                         user_id=user_id, 
-                        profile_id=message.get("profileId", "default") if isinstance(message, dict) else "default", 
                         query=chat_query, 
-                        thread_id=routeId
+                        thread_id=user_id
                     )
                     
-                    # 결과 전송 (필요 시 JSON 구조화 가능)
+                    # 결과 전송
                     await manager.send_personal_message({
                         "type": "CHAT_RESPONSE",
                         "message": agent_res,
@@ -159,7 +165,7 @@ async def navigation_websocket(
                     "message": "유효하지 않은 JSON 형식입니다."
                 }, websocket)
             except Exception as e:
-                logger.error(f"Error processing navigation data for route {routeId}: {e}")
+                logger.error(f"Error processing data for user {user_id}: {e}")
                 await manager.send_personal_message({
                     "type": "ERROR", 
                     "message": "데이터 처리 중 오류가 발생했습니다.",
@@ -167,11 +173,11 @@ async def navigation_websocket(
                 }, websocket)
 
     except WebSocketDisconnect:
-        logger.info(f"Route {routeId} disconnected by client")
+        logger.info(f"User {user_id} disconnected")
     except Exception as e:
-        logger.error(f"WebSocket Error for route {routeId}: {e}")
+        logger.error(f"WebSocket Error for user {user_id}: {e}")
     finally:
-        manager.disconnect(routeId)
+        manager.disconnect(user_id)
         try:
             await websocket.close()
         except Exception:
