@@ -1,5 +1,5 @@
 from langchain_core.tools import tool
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.clients.maps_client import MapsClient
 from app.services.environment_service import EnvironmentService
 from app.services.risk_scorer import RiskScorer
