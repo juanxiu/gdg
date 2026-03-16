@@ -25,6 +25,9 @@ class RiskLevel(str, Enum):
 class TravelMode(str, Enum):
     WALK = "WALK"
     WHEELCHAIR = "WHEELCHAIR"
+    DRIVE = "DRIVE"
+    BICYCLE = "BICYCLE"
+    TRANSIT = "TRANSIT"
 
 
 class HazardType(str, Enum):

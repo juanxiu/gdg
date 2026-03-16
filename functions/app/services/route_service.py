@@ -173,29 +173,7 @@ class RouteService:
         dur_diff = safest_path.totalDuration - fastest_path.totalDuration
         risk_diff = safest_path.healthRiskScore - fastest_path.healthRiskScore # 보통 음수일 것 (안전한게 낮음)
 
-        # 4. 에이전트 기반 분석 및 추천 생성
-        # 에이전트가 데이터 수집부터 판단까지 수행하도록 쿼리 전달
-        query = (
-            f"출발지({request.origin})에서 목적지({request.destination})까지의 경로를 분석해줘. "
-            f"현재 '안전 경로(ID: {safest_path.routeId})'와 '최단 경로(ID: {fastest_path.routeId})'가 있어. "
-            f"둘의 차이점(거리: {dist_diff}m, 시간: {dur_diff}s, 리스크 점수 차이: {risk_diff})을 고려해서 "
-            f"사용자 프로필({profile.model_dump()})에 맞는 최적의 추천과 그 이유를 자연어로 설명해줘."
-            "응답은 반드시 '추천: [추천내용] | 사유: [상세사유]' 형식을 지켜줘."
-        )
-        
-        agent_response = await self.agent.run(
-            user_id=user_id,
-            query=query
-        )
-
-        # 에이전트 응답 파싱 (단순화를 위해 split 처리, 실제로는 구조화된 출력이 더 좋음)
-        recommendation = "안전 경로를 권장합니다."
-        reason = agent_response
-        if "|" in agent_response:
-            parts = agent_response.split("|")
-            recommendation = parts[0].replace("추천:", "").strip()
-            reason = parts[1].replace("사유:", "").strip()
-
+        # 4. Return structured comparison data
         return CompareResponse(
             comparison={
                 "safePath": safest_path,
@@ -204,8 +182,8 @@ class RouteService:
                     "distanceDiff": dist_diff,
                     "durationDiff": dur_diff,
                     "riskScoreDiff": risk_diff,
-                    "recommendation": recommendation,
-                    "reason": reason
+                    "recommendation": "Safety prioritized" if risk_diff < 0 else "Fastest route recommended",
+                    "reason": f"Safe path reduces risk by {abs(risk_diff)} points but takes {dur_diff}s longer."
                 }
             }
         )
@@ -324,7 +302,6 @@ class RouteService:
             )
             agent_response = await self.agent.run(
                 user_id=user_id,
-                profile_id=request.profile_id,
                 query=query
             )
             
