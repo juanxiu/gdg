@@ -1,12 +1,11 @@
 import logging
-from typing import Optional, Dict, Any
+from typing import Dict, Any
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
 from pydantic import BaseModel, Field
 from app.config import get_settings
-from app.models.common import RiskLevel, HazardType
-from app.models.route import LocationUpdateResponse, AheadScan, AheadHazard
+from app.models.common import RiskLevel
 
 logger = logging.getLogger("uvicorn")
 

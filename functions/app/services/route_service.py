@@ -159,6 +159,9 @@ class RouteService:
         if not safe_resp.paths:
             raise HTTPException(status_code=404, detail="No paths available for comparison")
 
+        # 0. 프로필 조회
+        profile = await self.profile_service.get(request.profileId, user_id)
+
         # 1. 안전성 기준 정렬된 결과 (이미 find_safe_route에서 정렬됨)
         safest_path = safe_resp.paths[0]
         
@@ -166,8 +169,6 @@ class RouteService:
         fastest_path = min(safe_resp.paths, key=lambda x: x.totalDuration)
         
         # 3. 차이 계산
-        dist_diff = safest_path.totalDistance - fastest_path.totalDistance
-        dur_diff = safest_path.totalDuration - fastest_path.totalDuration
         dur_diff = safest_path.totalDuration - fastest_path.totalDuration
         risk_diff = safest_path.healthRiskScore - fastest_path.healthRiskScore # 보통 음수일 것 (안전한게 낮음)
 
