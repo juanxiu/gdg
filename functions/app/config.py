@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Google Gemini API Key
     google_api_key: str = ""
    
+    # OpenAI API Key
+    openai_api_key: str = ""
+   
 
     # Firestore
     firestore_collection_prefix: str = ""  # 환경별 분리: "dev_", "prod_"
