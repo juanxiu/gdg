@@ -60,8 +60,14 @@ async def get_user_profile(user_id: str) -> Dict[str, Any]:
 
 @tool
 async def update_user_profile(user_id: str, conditions_update: Dict[str, Any]) -> str:
-    """사용자의 건강 프로필 정보를 업데이트합니다. 
-    conditions_update는 {'respiratory': {'enabled': True, 'severity': 'high'}, 'allergyPollen': {'enabled': True}} 등의 형식입니다."""
+    """사용자의 건강 프로필 정보를 업데이트합니다.
+    conditions_update에는 변경할 항목만 포함합니다. 가능한 키:
+    - respiratory: 호흡기 질환 (천식, COPD, 비염 등)
+    - cardiovascular: 심혈관 질환
+    - heatVulnerable: 온열 질환 취약
+    - allergyPollen: 꽃가루 알레르기
+    각 항목의 형식: {"enabled": true/false, "severity": "low"/"medium"/"high"}
+    예시: {"allergyPollen": {"enabled": true, "severity": "high"}, "respiratory": {"enabled": true, "severity": "low"}}"""
     service = ProfileService()
     try:
         from app.models.profile import ProfileUpdateRequest
@@ -69,10 +75,17 @@ async def update_user_profile(user_id: str, conditions_update: Dict[str, Any]) -
         profile = await service.get_by_user_id(user_id)
         if not profile:
             return "프로필을 찾을 수 없습니다. 먼저 프로필을 생성해주세요."
-        update_req = ProfileUpdateRequest(conditions=conditions_update)
+        
+        # 기존 프로필의 conditions를 가져와서 변경할 항목만 머지
+        existing_conditions = profile.conditions.model_dump()
+        for key, value in conditions_update.items():
+            if key in existing_conditions:
+                existing_conditions[key].update(value)
+        
+        update_req = ProfileUpdateRequest(conditions=existing_conditions)
         result = await service.update(profile.profile_id, user_id, update_req)
         if result:
-            return "사용자 프로필이 성공적으로 업데이트되었습니다."
+            return f"사용자 프로필이 성공적으로 업데이트되었습니다. 업데이트된 항목: {list(conditions_update.keys())}"
         return "프로세스 오류: 프로필 업데이트 권한이 없습니다."
     except Exception as e:
         logger.error(f"Error in update_user_profile tool: {e}")
@@ -121,4 +134,36 @@ async def compare_routes(user_id: str, origin_lat: float, origin_lng: float, des
         return result.model_dump()
     except Exception as e:
         logger.error(f"Error in compare_routes tool: {e}")
+        return {"error": str(e)}
+
+@tool
+async def search_place(query: str) -> Dict[str, Any]:
+    """장소 이름이나 주소로 검색하여 좌표(위도, 경도)를 포함한 장소 정보를 반환합니다.
+    예: '강남역', '이화여대 정문', '서울시청' 등으로 검색 가능합니다."""
+    client = MapsClient()
+    try:
+        # 1. 자동완성으로 후보 검색
+        predictions = await client.autocomplete(query)
+        if not predictions:
+            return {"error": f"'{query}'에 대한 검색 결과가 없습니다."}
+        
+        # 2. 첫 번째 결과의 상세 정보 조회 (좌표 포함)
+        place_id = predictions[0].get("placeId") or predictions[0].get("place_id")
+        if not place_id:
+            return {"results": predictions, "message": "좌표를 가져오려면 place_id가 필요합니다."}
+        
+        details = await client.get_place_details(place_id)
+        if details:
+            return {
+                "name": details.get("name"),
+                "address": details.get("address"),
+                "lat": details.get("lat"),
+                "lng": details.get("lng"),
+                "placeId": place_id
+            }
+        
+        # 상세 조회 실패 시 자동완성 결과라도 반환
+        return {"results": predictions}
+    except Exception as e:
+        logger.error(f"Error in search_place tool: {e}")
         return {"error": str(e)}

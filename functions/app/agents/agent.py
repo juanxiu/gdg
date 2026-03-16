@@ -9,7 +9,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from app.agents.tools import (
     get_candidate_routes, get_environmental_data, 
     get_user_profile, calculate_safety_score, update_user_profile,
-    compare_routes
+    compare_routes, search_place
 )
 import logging
 
@@ -28,7 +28,7 @@ class SafePathAgent:
         self.tools = [
             get_candidate_routes, get_environmental_data, 
             get_user_profile, calculate_safety_score, update_user_profile,
-            compare_routes
+            compare_routes, search_place
         ]
         self.tool_node = ToolNode(self.tools)
         
@@ -76,26 +76,47 @@ class SafePathAgent:
 
     async def _call_model(self, state: AgentState):
         messages = state["messages"]
+        user_id = state["user_id"]
         
         # 시스템 프롬프트: 페르소나 및 도구 사용 지침 강화
         system_prompt = (
             "당신은 SafePath의 지능형 건강 길잡이입니다. 사용자의 안전과 건강을 최우선으로 합니다.\n\n"
+            f"현재 접속 중인 사용자 ID (user_id): `{user_id}`\n\n"
             "### 핵심 지침:\n"
-            "1. **정보 수집 (Profiling)**: 사용자의 건강 상태(호흡기 질환, 알레르기 등)가 파악되지 않았다면, "
+            "1. **정보 수집 (Profiling)**: 사용자의 건강 상태가 파악되지 않았다면, "
             "친절하게 질문하여 정보를 얻으세요. 한 번에 너무 많은 질문을 하지 말고 자연스럽게 대화하세요.\n"
-            "2. **도구 활용 (Action)**: 사용자가 정보를 주면 `update_user_profile`을 호출하고, "
-            "길 안내를 원하면 `get_candidate_routes`와 `calculate_safety_score` 등을 활용하세요.\n"
-            "3. **데이터 기반 답변**: 도구의 결과를 바탕으로 답변하세요. 경로 데이터가 있다면 "
-            "프론트엔드가 지도를 그릴 수 있도록 구체적인 정보를 포함해야 합니다.\n"
-            "4. **언어**: 항상 한국어로 친절하고 전문적으로 답변하세요.\n\n"
+            "2. **프로필 업데이트**: 사용자가 건강 정보를 알려주면 즉시 `update_user_profile`을 호출하세요. "
+            f"이때 반드시 위의 `user_id`(`{user_id}`)를 사용하세요.\n"
+            "3. **장소 검색**: 사용자가 장소 이름을 말하면 `search_place`로 좌표를 찾으세요.\n"
+            "4. **경로 안내**: 길 안내를 원하면 `get_candidate_routes`와 `calculate_safety_score`를 활용하세요. "
+            f"도구 호출 시 `user_id`가 필요하다면 `{user_id}`를 사용하세요.\n"
+            "5. **경로 비교**: 경로 비교를 원하면 `compare_routes`를 활용하세요. "
+            f"이때도 `user_id`는 `{user_id}`를 사용합니다.\n"
+            "6. **언어**: 항상 한국어로 친절하고 전문적으로 답변하세요.\n\n"
+            "### 프로필 스키마 (반드시 이 형식으로 update_user_profile 호출):\n"
+            "conditions_update의 키와 한국어 매핑:\n"
+            "- `respiratory`: 호흡기 질환 (천식, COPD, 비염, 기관지염)\n"
+            "- `cardiovascular`: 심혈관 질환 (고혈압, 심장병, 부정맥)\n"
+            "- `heatVulnerable`: 온열 질환 취약 (열사병, 더위 취약)\n"
+            "- `allergyPollen`: 꽃가루/꽃 알레르기 (화분증, 알레르기 비염)\n\n"
+            "각 항목 형식: {\"enabled\": true, \"severity\": \"low\"/\"medium\"/\"high\"}\n"
+            "심각도 매핑: 경증/약함 → \"low\", 중등증/보통 → \"medium\", 중증/심함 → \"high\"\n\n"
+            "예시) 사용자가 '꽃 알레르기 중증, 비염 경증'이라고 하면:\n"
+            "update_user_profile(\n"
+            f"  user_id=\"{user_id}\",\n"
+            "  conditions_update={\n"
+            "    \"allergyPollen\": {\"enabled\": true, \"severity\": \"high\"},\n"
+            "    \"respiratory\": {\"enabled\": true, \"severity\": \"low\"}\n"
+            "  }\n"
+            ")\n\n"
             "### 응답 형식:\n"
-            "사용자에게 보여줄 아름다운 텍스트 답변을 작성하세요."
+            "사용자에게 보여줄 친절한 텍스트 답변을 작성하세요."
         )
 
+        from langchain_core.messages import SystemMessage
         # 첫 메시지인 경우 시스템 프롬프트 삽입
-        if not any(isinstance(m, HumanMessage) and m.content == system_prompt for m in messages):
-            # 실제로는 첫 번째 HumanMessage 앞에 위치시키는 것이 좋음
-            messages = [HumanMessage(content=system_prompt)] + list(messages)
+        if not any(isinstance(m, SystemMessage) for m in messages):
+            messages = [SystemMessage(content=system_prompt)] + list(messages)
 
         response = await self.llm.ainvoke(messages)
         return {"messages": [response]}
