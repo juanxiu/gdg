@@ -70,6 +70,14 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def global_exception_handler(request: Request, exc: Exception):
         logger = logging.getLogger("uvicorn")
+        
+        # HTTPException인 경우 해당 정보를 그대로 반환하여 404 등이 500으로 바뀌지 않게 함
+        if hasattr(exc, "status_code") and hasattr(exc, "detail"):
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"detail": exc.detail}
+            )
+            
         logger.error(f"Global Exception: {str(exc)}")
         logger.error(traceback.format_exc())
         return JSONResponse(
