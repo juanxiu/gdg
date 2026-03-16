@@ -23,7 +23,7 @@ class ReportService:
         period_str = f"{start_date.date().isoformat()} ~ {end_date.date().isoformat()}"
 
         # Firestore 쿼리
-        query = self.collection.where("profileId", "==", profile_id) \
+        query = self.collection.where("profile_id", "==", profile_id) \
                                .where("startTime", ">=", start_of_period) \
                                .where("startTime", "<=", end_of_period)
         
@@ -54,7 +54,7 @@ class ReportService:
 
         return WeeklyReportResponse(
             period=period_str,
-            profileId=profile_id,
+            profile_id=profile_id,
             summary=WeeklyReportSummary(
                 totalTrips=len(trips_list),
                 totalDistance=total_dist,

@@ -38,7 +38,7 @@ class WeeklyReportSummary(BaseModel):
 class WeeklyReportResponse(BaseModel):
     """주간 건강 경로 리포트 응답"""
     period: str = Field(..., description="조회 기간 (예: 2024-03-08 ~ 2024-03-14)")
-    profileId: str
+    profile_id: str
     summary: WeeklyReportSummary
     exposureSummary: ExposureSummary
     trips: List[TripSummary]
