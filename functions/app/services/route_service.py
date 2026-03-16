@@ -11,7 +11,7 @@ from app.models.route import (
 from app.services.risk_scorer import RiskScorer
 from app.services.profile_service import ProfileService
 from app.services.environment_service import EnvironmentService
-from app.services.llm_service import LLMService
+from app.agents.agent import SafePathAgent
 from app.clients.maps_client import MapsClient
 from app.utils.grid import GridManager
 from app.config import get_settings
@@ -27,7 +27,7 @@ class RouteService:
         self.env_service = EnvironmentService()
         self.maps_client = MapsClient()
         self.risk_scorer = RiskScorer()
-        self.llm_service = LLMService()
+        self.agent = SafePathAgent()
         self.settings = get_settings()
         self.db = get_collection("routes") # 경로 저장용 컬렉션
 
@@ -173,12 +173,29 @@ class RouteService:
         dur_diff = safest_path.totalDuration - fastest_path.totalDuration
         risk_diff = safest_path.healthRiskScore - fastest_path.healthRiskScore # 보통 음수일 것 (안전한게 낮음)
 
-        # LLM 기반 추천 사유 생성
-        llm_res = await self.llm_service.generate_route_recommendation(
-            safe_path_data=safest_path.model_dump(),
-            fastest_path_data=fastest_path.model_dump(),
-            profile_data=profile.model_dump() if profile else {}
+        # 4. 에이전트 기반 분석 및 추천 생성
+        # 에이전트가 데이터 수집부터 판단까지 수행하도록 쿼리 전달
+        query = (
+            f"출발지({request.origin})에서 목적지({request.destination})까지의 경로를 분석해줘. "
+            f"현재 '안전 경로(ID: {safest_path.routeId})'와 '최단 경로(ID: {fastest_path.routeId})'가 있어. "
+            f"둘의 차이점(거리: {dist_diff}m, 시간: {dur_diff}s, 리스크 점수 차이: {risk_diff})을 고려해서 "
+            f"사용자 프로필({profile.model_dump()})에 맞는 최적의 추천과 그 이유를 자연어로 설명해줘."
+            "응답은 반드시 '추천: [추천내용] | 사유: [상세사유]' 형식을 지켜줘."
         )
+        
+        agent_response = await self.agent.run(
+            user_id=user_id,
+            profile_id=request.profileId,
+            query=query
+        )
+
+        # 에이전트 응답 파싱 (단순화를 위해 split 처리, 실제로는 구조화된 출력이 더 좋음)
+        recommendation = "안전 경로를 권장합니다."
+        reason = agent_response
+        if "|" in agent_response:
+            parts = agent_response.split("|")
+            recommendation = parts[0].replace("추천:", "").strip()
+            reason = parts[1].replace("사유:", "").strip()
 
         return CompareResponse(
             comparison={
@@ -188,8 +205,8 @@ class RouteService:
                     "distanceDiff": dist_diff,
                     "durationDiff": dur_diff,
                     "riskScoreDiff": risk_diff,
-                    "recommendation": llm_res.recommendation,
-                    "reason": llm_res.reason
+                    "recommendation": recommendation,
+                    "reason": reason
                 }
             }
         )
@@ -295,14 +312,31 @@ class RouteService:
                     location=LatLng.model_validate(seg["startLatLng"])
                 ))
 
-        # 5. 위험 감지 시 LLM 기반 맞춤형 알림 메시지 생성
+        # 5. 위험 감지 시 에이전트 기반 분석
         alert_message = ""
+        reroute_recommended = False
         if hazard_detected:
-            llm_alert = await self.llm_service.generate_navigation_alert(
-                hazard_data=[h.model_dump() for h in ahead_hazards][0], # 최우선 위험
-                profile_data=profile.model_dump() if profile else {}
+            # 에이전트에게 현재 상황과 유저 프로필을 전달하여 판단 요청
+            query = (
+                f"현재 내비게이션 중 전방 {scan_dist}m 지점에 위험이 감지되었습니다. "
+                f"위험 정보: {[h.model_dump() for h in ahead_hazards]} "
+                f"사용자 프로필: {profile.model_dump() if profile else {}} "
+                "이 상황이 사용자에게 얼마나 위험한지 판단하고, '메시지: [설명] | 재탐색권장: [True/False]' 형식으로 답해줘."
             )
-            alert_message = llm_alert.message
+            agent_response = await self.agent.run(
+                user_id=user_id,
+                profile_id=request.profileId,
+                query=query
+            )
+            
+            # 응답 파싱
+            if "|" in agent_response:
+                parts = agent_response.split("|")
+                alert_message = parts[0].replace("메시지:", "").strip()
+                reroute_val = parts[1].replace("재탐색권장:", "").strip().lower()
+                reroute_recommended = (reroute_val == "true")
+            else:
+                alert_message = agent_response
 
         return LocationUpdateResponse(
             status="HAZARD_AHEAD" if hazard_detected else "ON_ROUTE",
@@ -314,7 +348,7 @@ class RouteService:
                 hazardDetected=hazard_detected,
                 hazards=ahead_hazards
             ),
-            rerouteRecommended=hazard_detected,
+            rerouteRecommended=reroute_recommended,
             eta=rem_dur,
             remainingDistance=rem_dist
         )

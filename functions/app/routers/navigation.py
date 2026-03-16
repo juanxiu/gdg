@@ -38,23 +38,23 @@ async def authenticate_websocket(websocket: WebSocket, token: str) -> dict:
 
 class ConnectionManager:
     def __init__(self):
-        # trip_id -> WebSocket 매핑
+        # routeId -> WebSocket 매핑
         self.active_connections: dict[str, WebSocket] = {}
 
-    async def connect(self, trip_id: str, websocket: WebSocket):
+    async def connect(self, routeId: str, websocket: WebSocket):
         await websocket.accept()
         # 기존 연결이 있다면 정리 (중복 연결 방지)
-        if trip_id in self.active_connections:
+        if routeId in self.active_connections:
             try:
-                await self.active_connections[trip_id].close(code=status.WS_1008_POLICY_VIOLATION)
+                await self.active_connections[routeId].close(code=status.WS_1008_POLICY_VIOLATION)
             except Exception:
                 pass
-        self.active_connections[trip_id] = websocket
+        self.active_connections[routeId] = websocket
 
-    def disconnect(self, trip_id: str):
-        if trip_id in self.active_connections:
-            del self.active_connections[trip_id]
-            logger.info(f"Connection for trip {trip_id} removed from manager")
+    def disconnect(self, routeId: str):
+        if routeId in self.active_connections:
+            del self.active_connections[routeId]
+            logger.info(f"Connection for route {routeId} removed from manager")
 
     async def send_personal_message(self, message: dict, websocket: WebSocket):
         try:
@@ -64,14 +64,14 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-@router.get("/ws/{trip_id}", summary="[WebSocket] 실시간 내비게이션 연결", description="**이 엔드포인트는 WebSocket 프로토콜(wss://) 전용입니다.**\n\n- **연결 방법**: `wss://{domain}/api/navigation/ws/{trip_id}?token={Firebase_ID_Token}`\n- **테스트 방법**: Postman의 WebSocket 또는 `wscat` 등을 이용하세요.")
-async def websocket_documentation(trip_id: str, token: str = Query(..., description="Firebase ID Token")):
+@router.get("/ws/{routeId}", summary="[WebSocket] 실시간 내비게이션 연결", description="**이 엔드포인트는 WebSocket 프로토콜(wss://) 전용입니다.**\n\n- **연결 방법**: `wss://{domain}/api/navigation/ws/{routeId}?token={Firebase_ID_Token}`\n- **테스트 방법**: Postman의 WebSocket 또는 `wscat` 등을 이용하세요.")
+async def websocket_documentation(routeId: str, token: str = Query(..., description="Firebase ID Token")):
     return {"message": "WebSocket 전용 엔드포인트입니다. wss:// 프로토콜로 연결하세요."}
 
-@router.websocket("/ws/{trip_id}")
+@router.websocket("/ws/{routeId}")
 async def navigation_websocket(
     websocket: WebSocket, 
-    trip_id: str,
+    routeId: str,
     token: str = Query(None)
 ):
     # 1. 인증 확인
@@ -80,7 +80,7 @@ async def navigation_websocket(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    await manager.connect(trip_id, websocket)
+    await manager.connect(routeId, websocket)
     service = RouteService()
     user_id = user_info["uid"]
     
@@ -93,7 +93,7 @@ async def navigation_websocket(
                 
                 if "location" in message:
                     update_req = LocationUpdateRequest(
-                        routeId=trip_id,
+                        routeId=routeId,
                         profileId=message.get("profileId", "default"),
                         location=LatLng(**message["location"])
                     )
@@ -124,7 +124,7 @@ async def navigation_websocket(
                     "message": "유효하지 않은 JSON 형식입니다."
                 }, websocket)
             except Exception as e:
-                logger.error(f"Error processing navigation data for trip {trip_id}: {e}")
+                logger.error(f"Error processing navigation data for route {routeId}: {e}")
                 await manager.send_personal_message({
                     "type": "ERROR", 
                     "message": "데이터 처리 중 오류가 발생했습니다.",
@@ -132,11 +132,11 @@ async def navigation_websocket(
                 }, websocket)
 
     except WebSocketDisconnect:
-        logger.info(f"Trip {trip_id} disconnected by client")
+        logger.info(f"Route {routeId} disconnected by client")
     except Exception as e:
-        logger.error(f"WebSocket Error for trip {trip_id}: {e}")
+        logger.error(f"WebSocket Error for route {routeId}: {e}")
     finally:
-        manager.disconnect(trip_id)
+        manager.disconnect(routeId)
         try:
             await websocket.close()
         except Exception:
