@@ -64,9 +64,19 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-@router.get("/ws/{routeId}", summary="[WebSocket] 실시간 내비게이션 연결", description="**이 엔드포인트는 WebSocket 프로토콜(wss://) 전용입니다.**\n\n- **연결 방법**: `wss://{domain}/api/navigation/ws/{routeId}?token={Firebase_ID_Token}`\n- **테스트 방법**: Postman의 WebSocket 또는 `wscat` 등을 이용하세요.")
+@router.get("/ws/{routeId}", summary="[WebSocket] 실시간 내비게이션 및 채팅 연결 가이드", description=(
+    "**이 엔드포인트는 WebSocket 프로토콜(wss://) 전용 가이드입니다.**\n\n"
+    "### 1. 연결 방법\n"
+    "`wss://{domain}/api/navigation/ws/{routeId}?token={Firebase_ID_Token}`\n\n"
+    "### 2. 메시지 규격 (Client -> Server)\n"
+    "- **위치 업데이트**: `{\"location\": {\"lat\": 37.5, \"lng\": 127.0}, \"profileId\": \"default\"}`\n"
+    "- **채팅/질문**: `{\"chat\": \"강남역 가는 길 알려줘\", \"profileId\": \"default\"}`\n\n"
+    "### 3. 메시지 규격 (Server -> Client)\n"
+    "- **에이전트 답변**: `{\"type\": \"CHAT_RESPONSE\", \"message\": \"...\", \"data\": { ... }}`\n"
+    "- **위험 알림**: `{\"type\": \"SYSTEM_ALERT\", \"severity\": \"WARNING\", ...}`"
+))
 async def websocket_documentation(routeId: str, token: str = Query(..., description="Firebase ID Token")):
-    return {"message": "WebSocket 전용 엔드포인트입니다. wss:// 프로토콜로 연결하세요."}
+    return {"message": "WebSocket 전용 엔드포인트입니다. 안내된 wss:// 프로토콜로 연결하세요."}
 
 @router.websocket("/ws/{routeId}")
 async def navigation_websocket(
@@ -97,7 +107,7 @@ async def navigation_websocket(
                 if isinstance(message, dict) and "location" in message:
                     update_req = LocationUpdateRequest(
                         routeId=routeId,
-                        profileId=message.get("profileId", "default"),
+                        profile_id=message.get("profile_id", "default"),
                         location=LatLng(**message["location"])
                     )
                     
@@ -116,16 +126,26 @@ async def navigation_websocket(
                             "aheadScan": response.aheadScan.model_dump()
                         }, websocket)
                 elif isinstance(message, str) or (isinstance(message, dict) and "chat" in message):
-                    # 사용자의 직접적인 채팅 메시지 처리 (프로필 답변 등)
+                    # 사용자의 직접적인 채팅 메시지 처리 (프로필 답변, 질문 등)
                     chat_query = message if isinstance(message, str) else message["chat"]
+                    
                     from app.agents.agent import get_agent
                     agent = get_agent()
-                    # thread_id를 routeId로 고정하여 대화 유지
-                    agent_res = await agent.run(user_id=user_id, profile_id="default", query=chat_query, thread_id=routeId)
                     
+                    # thread_id를 routeId로 고정하여 대화 문맥 유지
+                    # profile_id는 실제 유저 프로필 시스템에 맞춰 "default" 또는 실제 ID 사용
+                    agent_res = await agent.run(
+                        user_id=user_id, 
+                        profile_id=message.get("profileId", "default") if isinstance(message, dict) else "default", 
+                        query=chat_query, 
+                        thread_id=routeId
+                    )
+                    
+                    # 결과 전송 (필요 시 JSON 구조화 가능)
                     await manager.send_personal_message({
                         "type": "CHAT_RESPONSE",
-                        "message": agent_res
+                        "message": agent_res,
+                        "timestamp": message.get("timestamp") if isinstance(message, dict) else None
                     }, websocket)
                 else:
                     await manager.send_personal_message({

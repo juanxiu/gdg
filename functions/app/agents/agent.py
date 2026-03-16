@@ -76,22 +76,31 @@ class SafePathAgent:
     async def _call_model(self, state: AgentState):
         messages = state["messages"]
         
-        if len(messages) == 1:
-            system_prompt = (
-                "당신은 SafePath의 지능형 건강 길잡이입니다. 사용자의 안전을 최우선으로 합니다.\n"
-                "1. 정보를 얻기 위해 도구를 적극적으로 활용하세요.\n"
-                "2. 만약 경로 안내에 필요한 사용자의 건강 정보(천식, 알레르기 등)가 부족하다고 판단되면, "
-                "추측하지 말고 사용자에게 정중하게 직접 물어보세요.\n"
-                "3. 사용자가 정보를 주면 `update_user_profile` 도구를 사용하여 프로필을 최신화하세요.\n"
-                "4. 최종 답변은 한국어로 친절하게 제공하세요."
-            )
+        # 시스템 프롬프트: 페르소나 및 도구 사용 지침 강화
+        system_prompt = (
+            "당신은 SafePath의 지능형 건강 길잡이입니다. 사용자의 안전과 건강을 최우선으로 합니다.\n\n"
+            "### 핵심 지침:\n"
+            "1. **정보 수집 (Profiling)**: 사용자의 건강 상태(호흡기 질환, 알레르기 등)가 파악되지 않았다면, "
+            "친절하게 질문하여 정보를 얻으세요. 한 번에 너무 많은 질문을 하지 말고 자연스럽게 대화하세요.\n"
+            "2. **도구 활용 (Action)**: 사용자가 정보를 주면 `update_user_profile`을 호출하고, "
+            "길 안내를 원하면 `get_candidate_routes`와 `calculate_safety_score` 등을 활용하세요.\n"
+            "3. **데이터 기반 답변**: 도구의 결과를 바탕으로 답변하세요. 경로 데이터가 있다면 "
+            "프론트엔드가 지도를 그릴 수 있도록 구체적인 정보를 포함해야 합니다.\n"
+            "4. **언어**: 항상 한국어로 친절하고 전문적으로 답변하세요.\n\n"
+            "### 응답 형식:\n"
+            "사용자에게 보여줄 아름다운 텍스트 답변을 작성하세요."
+        )
+
+        # 첫 메시지인 경우 시스템 프롬프트 삽입
+        if not any(isinstance(m, HumanMessage) and m.content == system_prompt for m in messages):
+            # 실제로는 첫 번째 HumanMessage 앞에 위치시키는 것이 좋음
             messages = [HumanMessage(content=system_prompt)] + list(messages)
 
         response = await self.llm.ainvoke(messages)
         return {"messages": [response]}
 
     async def run(self, user_id: str, profile_id: str, query: str, thread_id: str = "default"):
-        """에이전트 실행 (체크포인팅 지원)"""
+        """에이전트 실행 (결과물 요약 및 필요시 데이터 포함)"""
         config = {"configurable": {"thread_id": thread_id}}
         inputs = {
             "messages": [HumanMessage(content=query)],
@@ -99,9 +108,12 @@ class SafePathAgent:
             "profile_id": profile_id
         }
         
-        # ainvoke를 호출할 때 config(thread_id)를 전달하여 상태 유지
         final_state = await self.app.ainvoke(inputs, config=config)
-        return final_state["messages"][-1].content
+        last_message = final_state["messages"][-1]
+        
+        # 도구 호출 결과 등이 포함되었는지 확인 (현재는 텍스트만 리턴하지만 확장 가능)
+        # 만약 도구 결과물 자체를 프론트에 넘겨야 한다면 여기서 state를 분석하여 구조화할 수 있음
+        return last_message.content
 
 # 싱글톤 인스턴스 제공 (메모리 세이버 유지를 위함)
 _agent_instance = None
