@@ -126,19 +126,28 @@ class SafePathAgent:
             "user_id": user_id
         }
         
-        # astream_events 또는 astream 활용 (여기서는 간단히 astream 사용)
+        # astream 활용 (stream_mode="updates")
+        last_yielded_content = None
+        
         async for event in self.app.astream(inputs, config=config, stream_mode="updates"):
             # event는 노드별 업데이트 내용을 담고 있음
             if "agent" in event:
                 message = event["agent"]["messages"][-1]
-                if message.content:
-                    yield {"type": "partial", "content": message.content}
-            # 도구 호출 시작 등 추가 이벤트 처리 가능
+                content = message.content
+                if content and content != last_yielded_content:
+                    yield {"type": "partial", "content": content}
+                    last_yielded_content = content
         
         # 마지막 상태 확인
         final_state = await self.app.aget_state(config)
         last_message = final_state.values["messages"][-1]
-        yield {"type": "final", "content": last_message.content}
+        
+        # 중복 방지: 이미 보낸 내용과 다를 때만 'final'로 보냄
+        # 내용이 같더라도 'final' 타입을 보장하기 위해 빈 내용이라도 보냄
+        if last_message.content != last_yielded_content:
+            yield {"type": "final", "content": last_message.content}
+        else:
+            yield {"type": "final", "content": ""}
 
 # 싱글톤 인스턴스 제공 (메모리 세이버 유지를 위함)
 _agent_instance = None
