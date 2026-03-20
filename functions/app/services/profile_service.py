@@ -16,6 +16,7 @@ class ProfileService:
         
         # Use RiskScorer to generate standardized initial weights
         from app.services.risk_scorer import RiskScorer
+        from app.models.profile import CustomWeights
         auto_weights_dict = RiskScorer.resolve_weights(request.conditions)
         auto_weights = CustomWeights(**auto_weights_dict)
 

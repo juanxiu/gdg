@@ -106,9 +106,12 @@ async def update_user_profile(
         
         if result:
             fields = []
-            if display_name: fields.append("name")
-            if age: fields.append("age")
-            if conditions_update: fields.append("health conditions")
+            if display_name:
+                fields.append("name")
+            if age:
+                fields.append("age")
+            if conditions_update:
+                fields.append("health conditions")
             return f"User profile updated successfully. Updated fields: {', '.join(fields)}"
         
         return "Process error: Permission denied for profile update."
