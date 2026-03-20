@@ -69,8 +69,13 @@ class MapsClient:
             return predictions
 
     async def get_candidate_routes(self, origin: LatLng, destination: LatLng, options: RouteOptions) -> List[dict]:
-        """Google Routes API 호출하여 후보 경로 반환"""
+        """Google Routes API(v2) 또는 Directions API(v1)를 호출하여 후보 경로 반환"""
         
+        # 1. TRANSIT 모드인 경우 레거시Directions API(v1) 사용 (v2는 아직 미지원)
+        if options.travelMode.value if hasattr(options.travelMode, 'value') else options.travelMode == "TRANSIT":
+            return await self._get_transit_routes_v1(origin, destination, options)
+            
+        # 2. 그 외 모드(WALK, BICYCLE, DRIVE 등)는 최신 Routes API(v2) 사용
         headers = {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": self.api_key,
@@ -115,31 +120,79 @@ class MapsClient:
             print(f"Routes API response: {data}")
             routes = []
             for r in data.get("routes", []):
+                # v2 포맷은 이미 split_route_into_segments에 맞춰져 있음
                 routes.append({
                     "polyline": r["polyline"]["encodedPolyline"],
                     "totalDistance": r["distanceMeters"],
                     "totalDuration": int(float(r["duration"].replace("s", ""))),
-                    "raw_steps": r["legs"][0]["steps"]
+                    "raw_steps": r["legs"][0]["steps"],
+                    "version": "v2"
+                })
+            return routes
+
+    async def _get_transit_routes_v1(self, origin: LatLng, destination: LatLng, options: RouteOptions) -> List[dict]:
+        """Legacy Directions API (v1) 호출하여 대중교통 경로 반환"""
+        params = {
+            "origin": f"{origin.lat},{origin.lng}",
+            "destination": f"{destination.lat},{destination.lng}",
+            "mode": "transit",
+            "alternatives": "true",
+            "language": "ko",
+            "key": self.api_key
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(self.directions_url, params=params, timeout=60.0)
+            if response.status_code != 200:
+                print(f"Error from Directions API v1: {response.text}")
+                return []
+            
+            data = response.json()
+            routes = []
+            for r in data.get("routes", []):
+                leg = r["legs"][0]
+                # v2 포맷과 호환되도록 데이터 정규화
+                routes.append({
+                    "polyline": r["overview_polyline"]["points"],
+                    "totalDistance": leg["distance"]["value"],
+                    "totalDuration": leg["duration"]["value"],
+                    "raw_steps": leg["steps"],
+                    "version": "v1" # 버전 정보 기록
                 })
             return routes
 
     def split_route_into_segments(self, raw_route: dict) -> List[dict]:
-        """경로 단계를 기반으로 100m~수백m 단위의 세그먼트로 변환"""
+        """경로 단계를 기반으로 세그먼트로 변환 (v1/v2 공통 처리)"""
         segments = []
+        is_v1 = raw_route.get("version") == "v1"
+        
         for step in raw_route["raw_steps"]:
-            # 각 Step 자체가 하나의 세그먼트가 됨 (Google이 이미 논리적 단위로 나눠줌)
-            start_loc = step["startLocation"]["latLng"]
-            end_loc = step["endLocation"]["latLng"]
-            
-            # Google Routes API v2는 때때로 duration 대신 staticDuration을 반환함
-            duration_str = step.get("duration") or step.get("staticDuration") or "0s"
+            if is_v1:
+                # Directions API v1 포맷 처리
+                start_lat = step["start_location"]["lat"]
+                start_lng = step["start_location"]["lng"]
+                end_lat = step["end_location"]["lat"]
+                end_lng = step["end_location"]["lng"]
+                distance = step["distance"]["value"]
+                duration = step["duration"]["value"]
+                instruction = step.get("html_instructions", "")
+            else:
+                # Routes API v2 포맷 처리
+                start_loc = step["startLocation"]["latLng"]
+                end_loc = step["endLocation"]["latLng"]
+                start_lat, start_lng = start_loc["latitude"], start_loc["longitude"]
+                end_lat, end_lng = end_loc["latitude"], end_loc["longitude"]
+                distance = step["distanceMeters"]
+                duration_str = step.get("duration") or step.get("staticDuration") or "0s"
+                duration = int(float(duration_str.replace("s", "")))
+                instruction = step.get("navigationInstruction", {}).get("instructions", "")
             
             segments.append({
-                "startLatLng": LatLng(lat=start_loc["latitude"], lng=start_loc["longitude"]),
-                "endLatLng": LatLng(lat=end_loc["latitude"], lng=end_loc["longitude"]),
-                "distance": step["distanceMeters"],
-                "duration": int(float(duration_str.replace("s", ""))),
-                "instruction": step.get("navigationInstruction", {}).get("instructions", "")
+                "startLatLng": LatLng(lat=start_lat, lng=start_lng),
+                "endLatLng": LatLng(lat=end_lat, lng=end_lng),
+                "distance": distance,
+                "duration": duration,
+                "instruction": instruction
             })
             
         return segments
