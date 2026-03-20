@@ -111,11 +111,17 @@ class MapsClient:
                 headers=headers,
                 timeout=60.0
             )
+            data = response.json()
+            
+            # v2 결과가 없거나 실패한 경우 도보/자전거면 v1으로 한 번 더 시도
+            if (response.status_code != 200 or not data.get("routes")) and payload["travelMode"] in ["WALK", "BICYCLE"]:
+                print(f"Routes API v2 returned no results for {payload['travelMode']}. Falling back to v1.")
+                return await self._get_routes_v1(origin, destination, options)
+            
             if response.status_code != 200:
                 print(f"Error from Routes API: {response.text}")
                 return []
             
-            data = response.json()
             print(f"Routes API payload: {payload}")
             print(f"Routes API response: {data}")
             routes = []
@@ -130,12 +136,21 @@ class MapsClient:
                 })
             return routes
 
-    async def _get_transit_routes_v1(self, origin: LatLng, destination: LatLng, options: RouteOptions) -> List[dict]:
-        """Legacy Directions API (v1) 호출하여 대중교통 경로 반환"""
+    async def _get_routes_v1(self, origin: LatLng, destination: LatLng, options: RouteOptions) -> List[dict]:
+        """Legacy Directions API (v1) 호출하여 경로 반환"""
+        mode_map = {
+            "WALK": "walking",
+            "BICYCLE": "bicycling",
+            "TRANSIT": "transit",
+            "DRIVE": "driving"
+        }
+        requested_mode = options.travelMode.value if hasattr(options.travelMode, 'value') else options.travelMode
+        v1_mode = mode_map.get(requested_mode, "walking")
+
         params = {
             "origin": f"{origin.lat},{origin.lng}",
             "destination": f"{destination.lat},{destination.lng}",
-            "mode": "transit",
+            "mode": v1_mode,
             "alternatives": "true",
             "language": "ko",
             "key": self.api_key
