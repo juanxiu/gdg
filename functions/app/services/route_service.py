@@ -286,7 +286,7 @@ class RouteService:
             if fresh_score >= 50: # WARNING 이상
                 hazard_detected = True
                 ahead_hazards.append(AheadHazard(
-                    type=HazardType.AIR_POLLUTION if env_dict.get("aqi", 0) > 100 else HazardType.POLLEN,
+                    type=HazardType.AIR_QUALITY if env_dict.get("aqi", 0) > 100 else HazardType.POLLEN,
                     severity=self.risk_scorer.classify_risk(fresh_score),
                     distanceAhead=scan_dist,
                     location=LatLng.model_validate(seg["startLatLng"])
