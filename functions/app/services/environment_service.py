@@ -29,7 +29,7 @@ class EnvironmentService:
         """특정 좌표의 실시간 환경 데이터 조회 (Cache-Aside 전략)"""
         results = await self.get_for_locations_batch([location])
         grid_id = GridManager.lat_lng_to_grid_id(location.lat, location.lng)
-        return results.get(grid_id)
+        return results.get(grid_id) if results else None
 
     async def get_for_locations_batch(self, locations: List[LatLng]) -> Dict[str, dict]:
         """여러 좌표의 실시간 환경 데이터를 배치로 조회"""
@@ -97,31 +97,36 @@ class EnvironmentService:
                 pollen_task = self.pollen_client.get_forecast(lat, lng)
                 aq_data, pollen_data = await asyncio.gather(aq_task, pollen_task)
 
-                # 데이터 가공 (pipeline/main.py 로직 유지)
+                # 데이터 가공 (안전하게 인덱스 확인)
                 pollen_level = 0
                 if pollen_data.get("dailyInfo") and pollen_data["dailyInfo"][0].get("pollenTypeInfo"):
                     info = pollen_data["dailyInfo"][0]["pollenTypeInfo"][0]
                     if "indexInfo" in info:
-                        pollen_level = info["indexInfo"]["value"]
+                        pollen_level = info["indexInfo"].get("value", 0)
+
+                # AQI 데이터 안전 파싱 (IndexError 방지)
+                aqi_val = 0
+                if aq_data.get("indexes") and len(aq_data["indexes"]) > 0:
+                    aqi_val = aq_data["indexes"][0].get("aqi", 0)
 
                 processed_data = {
                     "gridId": grid_id,
                     "lat": lat,
                     "lng": lng,
                     "updatedAt": firestore.SERVER_TIMESTAMP,
-                    "aqi": aq_data["indexes"][0]["aqi"],
+                    "aqi": aqi_val,
                     "pm25": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "pm25"), 0),
                     "pm10": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "pm10"), 0),
                     "no2": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "no2"), 0),
                     "o3": next((p["concentration"]["value"] for p in aq_data.get("pollutants", []) if p["code"] == "o3"), 0),
                     "pollenLevel": pollen_level,
-                    "temperature": 0.0, # 추후 기상 API 연동
+                    "temperature": 0.0,
                     "feelsLike": 0.0,
                     "humidity": 0,
                     "shadeRatio": 0.0
                 }
 
-                # Firestore 저장 (백그라운드 실행 권장되나 여기서는 동기적 유지)
+                # Firestore 저장
                 await self.collection.document(grid_id).set(processed_data)
                 return processed_data
                 
@@ -140,6 +145,14 @@ class EnvironmentService:
     async def get_current(self, lat: float, lng: float) -> CurrentEnvironmentResponse:
         """현재 위치의 환경 상세 정보 (API 엔드포인트용)"""
         data = await self.get_for_location(LatLng(lat=lat, lng=lng))
+        if not data:
+            # 데이터가 없는 경우 기본값 반환 (서버 오류 방지)
+            data = {
+                "aqi": 0, "pm25": 0.0, "pm10": 0.0, "no2": 0.0, "o3": 0.0,
+                "pollenLevel": 0, "temperature": 20.0, "feelsLike": 20.0,
+                "humidity": 50, "pollenTypes": []
+            }
+
         aqi = data.get("aqi", 0)
         pollen_level = data.get("pollenLevel", 0)
         

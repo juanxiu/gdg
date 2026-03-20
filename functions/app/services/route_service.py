@@ -11,7 +11,6 @@ from app.models.route import (
 from app.services.risk_scorer import RiskScorer
 from app.services.profile_service import ProfileService
 from app.services.environment_service import EnvironmentService
-from app.agents.agent import get_agent
 from app.clients.maps_client import MapsClient
 from app.utils.grid import GridManager
 from app.config import get_settings
@@ -23,6 +22,7 @@ class RouteService:
     """SafePath 경로 탐색 및 관리 서비스"""
 
     def __init__(self):
+        from app.agents.agent import get_agent # 순환 참조 방지를 위해 지연 임포트
         self.profile_service = ProfileService()
         self.env_service = EnvironmentService()
         self.maps_client = MapsClient()

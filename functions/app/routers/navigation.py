@@ -170,8 +170,8 @@ async def navigation_websocket(
                 logger.error(f"Error processing data for user {user_id}: {e}\n{traceback.format_exc()}")
                 await manager.send_personal_message({
                     "type": "ERROR", 
-                    "message": "요청 처리 중 오류가 발생했습니다.",
-                    "detail": str(e),
+                    "message": f"요청 처리 중 오류가 발생했습니다: {str(e)}", # 상세 내용 포함
+                    "detail": traceback.format_exc(),
                     "hint": "네트워크 상태를 확인하거나 잠시 후 다시 시도해주세요."
                 }, websocket)
 
