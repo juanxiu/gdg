@@ -14,6 +14,7 @@ class MapsClient:
         self.routes_url = "https://routes.googleapis.com/directions/v2:computeRoutes"
         self.autocomplete_url = "https://maps.googleapis.com/maps/api/place/autocomplete/json"
         self.details_url = "https://maps.googleapis.com/maps/api/place/details/json"
+        self.directions_url = "https://maps.googleapis.com/maps/api/directions/json"
 
     async def get_place_details(self, place_id: str) -> dict:
         """Google Places API Details 호출"""
@@ -180,10 +181,49 @@ class MapsClient:
                 })
             return routes
 
+    async def _get_transit_routes_v1(self, origin: LatLng, destination: LatLng, options: RouteOptions) -> List[dict]:
+        """Directions API v1 TRANSIT 전용 호출 (transit_details 포함 응답 처리)"""
+        import time as _time
+
+        params = {
+            "origin": f"{origin.lat},{origin.lng}",
+            "destination": f"{destination.lat},{destination.lng}",
+            "mode": "transit",
+            "alternatives": "true",
+            "language": "ko",
+            "departure_time": str(int(_time.time())),  # 현재 시각 기준
+            "key": self.api_key
+        }
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(self.directions_url, params=params, timeout=60.0)
+            if response.status_code != 200:
+                print(f"Error from Directions API v1 (transit): {response.text}")
+                return []
+
+            data = response.json()
+            if data.get("status") != "OK":
+                print(f"Directions API v1 transit status: {data.get('status')}. Info: {data.get('error_message')}")
+                return []
+
+            routes = []
+            for r in data.get("routes", []):
+                leg = r["legs"][0]
+                routes.append({
+                    "polyline": r["overview_polyline"]["points"],
+                    "totalDistance": leg["distance"]["value"],
+                    "totalDuration": leg["duration"]["value"],
+                    "raw_steps": leg["steps"],
+                    "version": "v1_transit"  # transit 전용 버전 태그
+                })
+            return routes
+
     def split_route_into_segments(self, raw_route: dict) -> List[dict]:
-        """경로 단계를 기반으로 세그먼트로 변환 (v1/v2 공통 처리)"""
+        """경로 단계를 기반으로 세그먼트로 변환 (v1/v2/v1_transit 공통 처리)"""
         segments = []
-        is_v1 = raw_route.get("version") == "v1"
+        version = raw_route.get("version", "v2")
+        is_v1 = version in ("v1", "v1_transit")
+        is_transit = version == "v1_transit"
         
         for step in raw_route["raw_steps"]:
             if is_v1:
@@ -194,7 +234,12 @@ class MapsClient:
                 end_lng = step["end_location"]["lng"]
                 distance = step["distance"]["value"]
                 duration = step["duration"]["value"]
-                instruction = step.get("html_instructions", "")
+                
+                # Transit 전용: transit_details에서 풍부한 안내 문구 생성
+                if is_transit and "transit_details" in step:
+                    instruction = self._build_transit_instruction(step)
+                else:
+                    instruction = step.get("html_instructions", "")
             else:
                 # Routes API v2 포맷 처리
                 start_loc = step["startLocation"]["latLng"]
@@ -215,3 +260,19 @@ class MapsClient:
             })
             
         return segments
+
+    def _build_transit_instruction(self, step: dict) -> str:
+        """transit_details로부터 사용자 친화적인 안내 문구 생성"""
+        td = step["transit_details"]
+        line = td.get("line", {})
+        line_name = line.get("short_name") or line.get("name", "")
+        vehicle_type = line.get("vehicle", {}).get("name", "대중교통")
+        
+        dep_stop = td.get("departure_stop", {}).get("name", "")
+        arr_stop = td.get("arrival_stop", {}).get("name", "")
+        num_stops = td.get("num_stops", 0)
+        
+        if line_name and dep_stop and arr_stop:
+            return f"{vehicle_type} {line_name} 탑승: {dep_stop} → {arr_stop} ({num_stops}정거장)"
+        
+        return step.get("html_instructions", "")
