@@ -141,18 +141,19 @@ async def navigation_websocket(
                     agent = get_agent()
                     
                     # thread_id를 user_id로 고정하여 대화 문맥 유지
-                    agent_res = await agent.run(
+                    async for chunk in agent.run_stream(
                         user_id=user_id, 
                         query=chat_query, 
                         thread_id=user_id
-                    )
-                    
-                    # 결과 전송
-                    await manager.send_personal_message({
-                        "type": "CHAT_RESPONSE",
-                        "message": agent_res,
-                        "timestamp": message.get("timestamp") if isinstance(message, dict) else None
-                    }, websocket)
+                    ):
+                        if chunk["content"]:
+                            # 결과 전송
+                            await manager.send_personal_message({
+                                "type": "CHAT_RESPONSE",
+                                "subtype": chunk["type"], # partial or final
+                                "message": chunk["content"],
+                                "timestamp": message.get("timestamp") if isinstance(message, dict) else None
+                            }, websocket)
                 else:
                     await manager.send_personal_message({
                         "type": "ERROR",
