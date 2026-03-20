@@ -20,11 +20,14 @@ class HealthConditions(BaseModel):
 
 class CustomWeights(BaseModel):
     """환경 요인별 커스텀 가중치"""
-    pm25: float = Field(2.0, ge=0, le=5, description="PM2.5 가중치")
-    temperature: float = Field(2.0, ge=0, le=5, description="체감온도 가중치")
-    pollen: float = Field(1.0, ge=0, le=5, description="꽃가루 가중치")
-    slope: float = Field(1.0, ge=0, le=5, description="경사도 가중치")
-    shade: float = Field(1.5, ge=0, le=5, description="그늘 가중치")
+    pm25: float = Field(2.0, ge=0, le=25, description="PM2.5 가중치")
+    pm10: float = Field(2.0, ge=0, le=25, description="PM10 가중치")
+    no2: float = Field(1.5, ge=0, le=25, description="NO2 가중치")
+    o3: float = Field(1.0, ge=0, le=25, description="O3 가중치")
+    pollen: float = Field(1.0, ge=0, le=25, description="꽃가루 가중치")
+    temperature: float = Field(2.0, ge=0, le=25, description="체감온도 가중치")
+    slope: float = Field(1.0, ge=0, le=25, description="경사도 가중치")
+    shade: float = Field(1.5, ge=0, le=25, description="그늘 가중치")
 
 
 # --- Request ---

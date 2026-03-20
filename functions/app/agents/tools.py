@@ -91,7 +91,15 @@ async def update_user_profile(
             existing_conditions_dict = profile.conditions.model_dump()
             for key, value in conditions_update.items():
                 if key in existing_conditions_dict:
-                    existing_conditions_dict[key].update(value)
+                    if isinstance(value, dict):
+                        existing_conditions_dict[key].update(value)
+                    elif isinstance(value, str):
+                        # Simple string update (e.g. {"respiratory": "high"})
+                        existing_conditions_dict[key]["severity"] = value
+                        existing_conditions_dict[key]["enabled"] = True
+                    elif isinstance(value, bool):
+                        # Simple boolean update (e.g. {"respiratory": true})
+                        existing_conditions_dict[key]["enabled"] = value
             
             new_conditions = HealthConditions(**existing_conditions_dict)
             update_data["conditions"] = new_conditions
@@ -116,10 +124,7 @@ async def update_user_profile(
         
         return "Process error: Permission denied for profile update."
     except Exception as e:
-        logger.error(f"Error in update_user_profile tool: {e}")
-        return f"Update failed: {str(e)}"
-    except Exception as e:
-        logger.error(f"Error in update_user_profile tool: {e}")
+        logger.error(f"Error in update_user_profile tool: {e}", exc_info=True)
         return f"Update failed: {str(e)}"
 
 @tool
