@@ -110,13 +110,13 @@ def create_app() -> FastAPI:
             "http://127.0.0.1:3000",
             "http://localhost:8080",
             "http://localhost:5173",
+            "https://gdg-frontend-vercel.vercel.app",  # Vercel 프론트엔드 추가
             "https://api-190228148301.asia-northeast3.run.app",
         ],
         allow_origin_regex="https?://.*",  # 모든 origin을 허용하면서 credentials 지원
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
-        expose_headers=["*"],
     )
 
     @app.get("/", tags=["Health Check"])
