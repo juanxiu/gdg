@@ -113,9 +113,14 @@ class RouteService:
             })
 
         if not scored_paths:
+            # Provide more helpful feedback for regions where walking/bicycle is not supported (e.g., Korea)
+            msg = "No candidate routes found."
+            if request.options.travelMode in [TravelMode.WALK, TravelMode.BICYCLE]:
+                msg += " Note: Walking/Bicycle directions are not supported in Korea via Google Maps. Please try 'TRANSIT' mode instead."
+            
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="No candidate routes found. Note: Walking/Bicycle directions may not be supported in this region (e.g., Korea)."
+                detail=msg
             )
 
         # 6. 모든 후보 경로를 Risk Score 순으로 정렬
