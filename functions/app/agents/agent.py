@@ -140,14 +140,34 @@ class SafePathAgent:
         
         # 마지막 상태 확인
         final_state = await self.app.aget_state(config)
-        last_message = final_state.values["messages"][-1]
-        
-        # 중복 방지: 이미 보낸 내용과 다를 때만 'final'로 보냄
-        # 내용이 같더라도 'final' 타입을 보장하기 위해 빈 내용이라도 보냄
-        if last_message.content != last_yielded_content:
-            yield {"type": "final", "content": last_message.content}
-        else:
+        messages = final_state.values.get("messages", [])
+        if not messages:
             yield {"type": "final", "content": ""}
+            return
+
+        last_message = messages[-1]
+        
+        # 도구 결과 데이터 추출 (마지막으로 성공한 경로 관련 도구 결과 찾기)
+        tool_data = None
+        import json
+        for msg in reversed(messages):
+            if msg.type == "tool":
+                try:
+                    # 'compare_routes'나 'get_candidate_routes'의 결과인지 확인
+                    parsed = json.loads(msg.content)
+                    if isinstance(parsed, dict) and ("paths" in parsed or "comparison" in parsed):
+                        tool_data = parsed
+                        break
+                except:
+                    continue
+        
+        # 중복 방지 및 최종 응답 전송
+        content = last_message.content if last_message.type == "ai" else ""
+        
+        if content != last_yielded_content:
+            yield {"type": "final", "content": content, "data": tool_data}
+        else:
+            yield {"type": "final", "content": "", "data": tool_data}
 
 # 싱글톤 인스턴스 제공 (메모리 세이버 유지를 위함)
 _agent_instance = None

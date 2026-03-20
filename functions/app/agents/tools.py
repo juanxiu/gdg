@@ -11,7 +11,7 @@ import logging
 logger = logging.getLogger("uvicorn")
 
 @tool
-async def get_candidate_routes(origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float, travel_mode: str = "TRANSIT") -> List[Dict[str, Any]]:
+async def get_candidate_routes(origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float, travel_mode: str = "WALK") -> List[Dict[str, Any]]:
     """Search for candidate routes between two points using Google Maps.
     - travel_mode: Select from 'WALK', 'BICYCLE', 'TRANSIT', 'DRIVE'. Defaults to 'WALK'."""
     client = MapsClient()
@@ -150,7 +150,7 @@ def calculate_safety_score(environment_data: Dict[str, Any], profile_conditions:
         return {"score": 0, "level": "UNKNOWN"}
 
 @tool
-async def compare_routes(user_id: str, origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float, travel_mode: str = "TRANSIT") -> Dict[str, Any]:
+async def compare_routes(user_id: str, origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float, travel_mode: str = "WALK") -> Dict[str, Any]:
     """Compare the fastest route and the safest route between two points. 
     Returns distance, duration, and health risk score differences."""
     from app.services.route_service import RouteService

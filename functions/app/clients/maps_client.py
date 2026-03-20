@@ -148,6 +148,10 @@ class MapsClient:
                 return []
             
             data = response.json()
+            if data.get("status") != "OK":
+                print(f"Directions API v1 status: {data.get('status')}. Info: {data.get('error_message')}")
+                return []
+                
             routes = []
             for r in data.get("routes", []):
                 leg = r["legs"][0]

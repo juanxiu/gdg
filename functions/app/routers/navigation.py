@@ -152,6 +152,7 @@ async def navigation_websocket(
                                 "type": "CHAT_RESPONSE",
                                 "subtype": chunk["type"], # partial or final
                                 "message": chunk["content"],
+                                "data": chunk.get("data"), # 구조화된 데이터 추가
                                 "timestamp": message.get("timestamp") if isinstance(message, dict) else None
                             }, websocket)
                 else:
