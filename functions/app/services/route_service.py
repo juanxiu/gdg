@@ -1,7 +1,7 @@
 import uuid
 import time
 from fastapi import HTTPException, status
-from app.models.common import LatLng, RiskLevel, HazardType
+from app.models.common import LatLng, RiskLevel, HazardType, TravelMode
 from app.models.route import (
     SafeRouteRequest, SafeRouteResponse, SafePathResult,
     RouteSegment, RouteMetadata, SegmentEnvironment,
