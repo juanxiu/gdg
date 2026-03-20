@@ -14,15 +14,10 @@ class ProfileService:
     async def create(self, user_id: str, request: ProfileCreateRequest) -> dict:
         profile_id = f"p_{uuid.uuid4().hex[:8]}"
         
-        # 가중치가 없으면 질환 정보를 보고 기본 가중치 자동 생성 (간략 구현)
-        # 실제로는 RiskScorer.resolve_weights() 등을 활용
-        auto_weights = CustomWeights(
-            pm25=2.5 if request.conditions.respiratory.enabled else 1.0,
-            temperature=3.0 if request.conditions.heatVulnerable.enabled else 1.0,
-            pollen=3.0 if request.conditions.allergyPollen.enabled else 1.0,
-            slope=2.0 if request.conditions.cardiovascular.enabled else 1.0,
-            shade=2.0 if request.conditions.heatVulnerable.enabled else 1.0
-        )
+        # Use RiskScorer to generate standardized initial weights
+        from app.services.risk_scorer import RiskScorer
+        auto_weights_dict = RiskScorer.resolve_weights(request.conditions)
+        auto_weights = CustomWeights(**auto_weights_dict)
 
         profile_data = {
             "profile_id": profile_id,
@@ -43,25 +38,29 @@ class ProfileService:
             "autoWeights": auto_weights
         }
 
-    async def get(self, profile_id: str, user_id: str = None) -> Optional[ProfileResponse]:
-        doc = await self.collection.document(profile_id).get()
+        doc_id = profile_id if profile_id != "default_profile" else f"p_default_{user_id[:8]}"
+        doc = await self.collection.document(doc_id).get()
         
-        # 만약 'default_profile'을 요청했는데 없으면 자동 생성 (UX 개선)
+        # If profile doesn't exist and it's a default request, create one specifically for this user
         if not doc.exists:
             if profile_id == "default_profile" and user_id:
                 from app.models.profile import HealthConditions, CustomWeights
+                from app.services.risk_scorer import RiskScorer
+                
+                initial_conditions = HealthConditions()
+                initial_weights = CustomWeights(**RiskScorer.resolve_weights(initial_conditions))
                 
                 default_data = {
-                    "profile_id": "default_profile",
+                    "profile_id": doc_id,
                     "userId": user_id,
-                    "displayName": "기본 사용자",
-                    "age": 70, # 기본 어르신 타겟
-                    "conditions": HealthConditions().model_dump(),
-                    "customWeights": CustomWeights().model_dump(),
+                    "displayName": "Default User",
+                    "age": 70, 
+                    "conditions": initial_conditions.model_dump(),
+                    "customWeights": initial_weights.model_dump(),
                     "createdAt": datetime.utcnow(),
                     "updatedAt": datetime.utcnow()
                 }
-                await self.collection.document("default_profile").set(default_data)
+                await self.collection.document(doc_id).set(default_data)
                 return ProfileResponse(**default_data)
             return None
         

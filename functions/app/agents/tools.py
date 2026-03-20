@@ -62,33 +62,59 @@ async def get_user_profile(user_id: str) -> Dict[str, Any]:
     return {}
 
 @tool
-async def update_user_profile(user_id: str, conditions_update: Dict[str, Any]) -> str:
-    """Update the user's health profile conditions.
-    - conditions_update: A dict containing only the fields to update. Available keys:
-        - respiratory: Respiratory diseases (Asthma, COPD, Rhinitis, etc.)
-        - cardiovascular: Cardiovascular diseases (Hypertension, Heart disease, etc.)
-        - heatVulnerable: Vulnerability to heat (Heatstroke, etc.)
-        - allergyPollen: Pollen allergy
-    - Format: {"enabled": bool, "severity": "low"|"medium"|"high"}
-    Example: {"allergyPollen": {"enabled": True, "severity": "high"}}"""
+async def update_user_profile(
+    user_id: str, 
+    conditions_update: Optional[Dict[str, Any]] = None,
+    display_name: Optional[str] = None,
+    age: Optional[int] = None
+) -> str:
+    """Update the user's profile information (name, age, or health conditions).
+    - conditions_update: Dict with health fields to update (respiratory, cardiovascular, heatVulnerable, allergyPollen).
+    - display_name: The user's name or preferred display name.
+    - age: The user's age (1-150).
+    Example: update_user_profile(user_id="...", display_name="John", age=30)"""
     service = ProfileService()
     try:
-        from app.models.profile import ProfileUpdateRequest
+        from app.models.profile import ProfileUpdateRequest, HealthConditions, CustomWeights
         profile = await service.get_by_user_id(user_id)
         if not profile:
             return "Profile not found. Please create a profile first."
         
-        # Merge updates with existing conditions
-        existing_conditions = profile.conditions.model_dump()
-        for key, value in conditions_update.items():
-            if key in existing_conditions:
-                existing_conditions[key].update(value)
+        update_data = {}
+        if display_name:
+            update_data["displayName"] = display_name
+        if age:
+            update_data["age"] = age
+            
+        if conditions_update:
+            # Merge updates with existing conditions
+            existing_conditions_dict = profile.conditions.model_dump()
+            for key, value in conditions_update.items():
+                if key in existing_conditions_dict:
+                    existing_conditions_dict[key].update(value)
+            
+            new_conditions = HealthConditions(**existing_conditions_dict)
+            update_data["conditions"] = new_conditions
+            
+            # CRITICAL: Recalculate weights to keep them in sync with new conditions
+            from app.services.risk_scorer import RiskScorer
+            new_weights_dict = RiskScorer.resolve_weights(new_conditions)
+            update_data["customWeights"] = CustomWeights(**new_weights_dict)
         
-        update_req = ProfileUpdateRequest(conditions=existing_conditions)
+        update_req = ProfileUpdateRequest(**update_data)
         result = await service.update(profile.profile_id, user_id, update_req)
+        
         if result:
-            return f"User profile updated successfully. Updated fields: {list(conditions_update.keys())}"
+            fields = []
+            if display_name: fields.append("name")
+            if age: fields.append("age")
+            if conditions_update: fields.append("health conditions")
+            return f"User profile updated successfully. Updated fields: {', '.join(fields)}"
+        
         return "Process error: Permission denied for profile update."
+    except Exception as e:
+        logger.error(f"Error in update_user_profile tool: {e}")
+        return f"Update failed: {str(e)}"
     except Exception as e:
         logger.error(f"Error in update_user_profile tool: {e}")
         return f"Update failed: {str(e)}"
