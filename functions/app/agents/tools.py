@@ -11,9 +11,34 @@ import logging
 logger = logging.getLogger("uvicorn")
 
 @tool
-async def get_candidate_routes(origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float, travel_mode: str = "WALK") -> List[Dict[str, Any]]:
+async def get_candidate_routes(user_id: str, origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float, travel_mode: str = "WALK") -> List[Dict[str, Any]]:
     """Search for candidate routes between two points using Google Maps.
+    IMPORTANT: Requires user_id. Will reject if the user has no profile (name, age, health conditions).
+    - user_id: The user's ID (required for profile check).
     - travel_mode: Select from 'WALK', 'BICYCLE', 'TRANSIT', 'DRIVE'. Defaults to 'WALK'."""
+    # 프로필 존재 및 완성도 검증
+    profile_service = ProfileService()
+    profile = await profile_service.get_by_user_id(user_id)
+    if not profile:
+        return [{"error": "프로필이 없습니다. 경로 안내 전에 이름, 나이, 건강 상태를 먼저 알려주세요."}]
+    
+    missing = []
+    if not profile.displayName or profile.displayName == "Default User":
+        missing.append("이름")
+    if not profile.age or profile.age == 0:
+        missing.append("나이")
+    conditions = profile.conditions
+    has_any_condition = any([
+        getattr(conditions, f, None) and getattr(getattr(conditions, f), 'enabled', False)
+        for f in ['respiratory', 'cardiovascular', 'heatVulnerable', 'allergyPollen']
+        if hasattr(conditions, f)
+    ])
+    if not has_any_condition:
+        missing.append("건강 상태(호흡기, 심혈관, 열사병 취약, 꽃가루 알레르기 등)")
+    
+    if missing:
+        return [{"error": f"프로필이 불완전합니다. 다음 정보를 먼저 알려주세요: {', '.join(missing)}"}]
+
     client = MapsClient()
     try:
         # travel_mode 검증 및 변환
