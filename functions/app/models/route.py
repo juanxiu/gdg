@@ -58,7 +58,7 @@ class RouteOptions(BaseModel):
     maxDetourMinutes: int = Field(10, ge=1, le=30, description="최대 우회 허용 시간 (분)")
     avoidStairs: bool = Field(False, description="계단 회피")
     preferParks: bool = Field(False, description="공원/녹지 선호")
-    travelMode: TravelMode = Field(TravelMode.WALK, description="이동 수단")
+    travelMode: TravelMode = Field(TravelMode.TRANSIT, description="이동 수단")
 
 
 class SafeRouteRequest(BaseModel):
@@ -97,6 +97,7 @@ class CompareRequest(BaseModel):
     destination: LatLng
     profile_id: str
     departureTime: Optional[str] = None
+    options: RouteOptions = Field(default_factory=RouteOptions)
 
 
 class RouteComparisonItem(BaseModel):
