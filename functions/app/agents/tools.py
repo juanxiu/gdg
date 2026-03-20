@@ -15,8 +15,14 @@ async def get_candidate_routes(origin_lat: float, origin_lng: float, dest_lat: f
     """Search for candidate routes between two points using Google Maps.
     - travel_mode: Select from 'WALK', 'BICYCLE', 'TRANSIT', 'DRIVE'. Defaults to 'WALK'."""
     client = MapsClient()
-    options = RouteOptions(travelMode=TravelMode(travel_mode))
     try:
+        # travel_mode 검증 및 변환
+        try:
+            tm = TravelMode(travel_mode)
+        except ValueError:
+            tm = TravelMode.TRANSIT # 기본값
+            
+        options = RouteOptions(travelMode=tm)
         routes = await client.get_candidate_routes(
             LatLng(lat=origin_lat, lng=origin_lng),
             LatLng(lat=dest_lat, lng=dest_lng),
@@ -156,19 +162,28 @@ async def compare_routes(user_id: str, origin_lat: float, origin_lng: float, des
         
         profile = await profile_service.get_by_user_id(user_id)
         if not profile:
-            return {"error": "Profile not found. Please create a profile first."}
+            return {"error": "프로필을 찾을 수 없습니다. 이름과 건강 정보를 먼저 말씀해 주세요."}
         
+        # 명시적으로 travel_mode 설정 (Enum 변환 확인)
+        from app.models.common import TravelMode
+        try:
+            tm = TravelMode(travel_mode)
+        except ValueError:
+            tm = TravelMode.TRANSIT # 기본값
+            
         request = CompareRequest(
             origin=LatLng(lat=origin_lat, lng=origin_lng),
             destination=LatLng(lat=dest_lat, lng=dest_lng),
             profile_id=profile.profile_id,
+            options=RouteOptions(travelMode=tm)
         )
         
         result = await service.compare_routes(request, user_id)
         return result.model_dump()
     except Exception as e:
-        logger.error(f"Error in compare_routes tool: {e}")
-        return {"error": str(e)}
+        logger.error(f"Error in compare_routes tool: {e}", exc_info=True)
+        # 404 등 구체적인 에러 메시지 포함
+        return {"error": f"경로 계산 실패: {str(e)}"}
 
 @tool
 async def search_place(query: str, place_id: Optional[str] = None) -> Dict[str, Any]:
