@@ -2,7 +2,14 @@ import uuid
 from datetime import datetime
 from typing import Optional
 from app.db.firestore import get_collection
-from app.models.profile import ProfileCreateRequest, ProfileResponse, ProfileUpdateRequest, CustomWeights
+from app.models.profile import (
+    ProfileCreateRequest, 
+    ProfileResponse, 
+    ProfileUpdateRequest, 
+    CustomWeights,
+    HealthConditions
+)
+from app.services.risk_scorer import RiskScorer
 
 
 class ProfileService:
@@ -15,8 +22,6 @@ class ProfileService:
         profile_id = f"p_{uuid.uuid4().hex[:8]}"
         
         # Use RiskScorer to generate standardized initial weights
-        from app.services.risk_scorer import RiskScorer
-        from app.models.profile import CustomWeights
         auto_weights_dict = RiskScorer.resolve_weights(request.conditions)
         auto_weights = CustomWeights(**auto_weights_dict)
 
@@ -39,15 +44,13 @@ class ProfileService:
             "autoWeights": auto_weights
         }
 
+    async def get(self, profile_id: str, user_id: str = None) -> Optional[ProfileResponse]:
         doc_id = profile_id if profile_id != "default_profile" else f"p_default_{user_id[:8]}"
         doc = await self.collection.document(doc_id).get()
         
         # If profile doesn't exist and it's a default request, create one specifically for this user
         if not doc.exists:
             if profile_id == "default_profile" and user_id:
-                from app.models.profile import HealthConditions, CustomWeights
-                from app.services.risk_scorer import RiskScorer
-                
                 initial_conditions = HealthConditions()
                 initial_weights = CustomWeights(**RiskScorer.resolve_weights(initial_conditions))
                 
