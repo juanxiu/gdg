@@ -1,17 +1,10 @@
 import operator
-from typing import Annotated, Sequence, TypedDict
-from langchain_openai import ChatOpenAI
+from typing import Annotated, Sequence, TypedDict, Any
 from langchain_core.messages import BaseMessage, HumanMessage
-from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import ToolNode
-from app.config import get_settings
-from langgraph.checkpoint.memory import MemorySaver
-from app.agents.tools import (
-    get_candidate_routes, get_environmental_data, 
-    get_user_profile, calculate_safety_score, update_user_profile,
-    compare_routes, search_place
-)
 import logging
+from app.config import get_settings
+
+logger = logging.getLogger("uvicorn")
 
 logger = logging.getLogger("uvicorn")
 
@@ -24,6 +17,16 @@ class SafePathAgent:
     """SafePath ReAct 에이전트 빌더 및 실행기 (Phase 2: Conversational)"""
 
     def __init__(self):
+        from langgraph.graph import StateGraph
+        from langgraph.prebuilt import ToolNode
+        from langgraph.checkpoint.memory import MemorySaver
+        from langchain_openai import ChatOpenAI
+        from app.agents.tools import (
+            get_candidate_routes, get_environmental_data, 
+            get_user_profile, calculate_safety_score, update_user_profile,
+            compare_routes, search_place
+        )
+
         settings = get_settings()
         self.tools = [
             get_candidate_routes, get_environmental_data, 

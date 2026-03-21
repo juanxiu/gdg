@@ -1,9 +1,5 @@
 from langchain_core.tools import tool
 from typing import List, Dict, Any, Optional
-from app.clients.maps_client import MapsClient
-from app.services.environment_service import EnvironmentService
-from app.services.risk_scorer import RiskScorer
-from app.services.profile_service import ProfileService
 from app.models.common import LatLng, TravelMode
 from app.models.route import RouteOptions
 import logging
@@ -16,6 +12,9 @@ async def get_candidate_routes(user_id: str, origin_lat: float, origin_lng: floa
     IMPORTANT: Requires user_id. Will reject if the user has no profile (name, age, health conditions).
     - user_id: The user's ID (required for profile check).
     - travel_mode: Select from 'WALK', 'BICYCLE', 'TRANSIT', 'DRIVE'. Defaults to 'WALK'."""
+    from app.services.profile_service import ProfileService
+    from app.clients.maps_client import MapsClient
+    
     # 프로필 존재 및 완성도 검증
     profile_service = ProfileService()
     profile = await profile_service.get_by_user_id(user_id)
@@ -75,6 +74,7 @@ async def get_candidate_routes(user_id: str, origin_lat: float, origin_lng: floa
 async def get_environmental_data(locations: List[Dict[str, float]]) -> Dict[str, Any]:
     """Retrieve environmental data such as air quality (AQI) and pollen levels for specified locations.
     - locations: A list of dicts like [{'lat': 37.5, 'lng': 127.0}, ...]."""
+    from app.services.environment_service import EnvironmentService
     service = EnvironmentService()
     try:
         latlngs = [LatLng(lat=loc['lat'], lng=loc['lng']) for loc in locations]
@@ -86,6 +86,7 @@ async def get_environmental_data(locations: List[Dict[str, float]]) -> Dict[str,
 @tool
 async def get_user_profile(user_id: str) -> Dict[str, Any]:
     """Retrieve the user's health profile (respiratory issues, allergies, etc.) using their user_id."""
+    from app.services.profile_service import ProfileService
     service = ProfileService()
     profile = await service.get_by_user_id(user_id)
     if profile:
@@ -104,6 +105,7 @@ async def update_user_profile(
     - display_name: The user's name or preferred display name.
     - age: The user's age (1-150).
     Example: update_user_profile(user_id="...", display_name="John", age=30)"""
+    from app.services.profile_service import ProfileService
     service = ProfileService()
     try:
         from app.models.profile import ProfileUpdateRequest, HealthConditions, CustomWeights
@@ -161,6 +163,7 @@ async def update_user_profile(
 @tool
 def calculate_safety_score(environment_data: Dict[str, Any], profile_conditions: List[str]) -> Dict[str, Any]:
     """Calculate the health risk score (0-100) and risk level for a location based on environmental data and user conditions."""
+    from app.services.risk_scorer import RiskScorer
     scorer = RiskScorer()
     weights = scorer.resolve_weights(profile_conditions, {})
     
@@ -182,6 +185,8 @@ async def compare_routes(user_id: str, origin_lat: float, origin_lng: float, des
     from app.models.route import CompareRequest
     
     try:
+        from app.services.route_service import RouteService
+        from app.services.profile_service import ProfileService
         service = RouteService()
         profile_service = ProfileService()
         
@@ -215,6 +220,7 @@ async def search_place(query: str, place_id: Optional[str] = None) -> Dict[str, 
     """Search for a place by name/address or retrieve details for a specific Google Place ID.
     - query: Search string (e.g., 'Gangnam Station')
     - place_id: Specific Google Place ID (if selected from a candidate list)"""
+    from app.clients.maps_client import MapsClient
     client = MapsClient()
     try:
         if place_id:
