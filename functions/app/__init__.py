@@ -105,17 +105,8 @@ def create_app() -> FastAPI:
     # CORS 미들웨어 (가장 마지막에 추가하여 가장 먼저 실행되도록 함)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:8080",
-            "http://localhost:5173",
-            "https://gdg-frontend-vercel.vercel.app",
-            "https://gdg-frontend-vercel-8q9dfbtbq-juanxius-projects.vercel.app", # Vercel Preview URL 추가
-            "https://api-190228148301.asia-northeast3.run.app",
-        ],
-        allow_origin_regex=r"https?://.*\.vercel\.app",  # Vercel 모든 도메인 허용
-        allow_credentials=True,
+        allow_origins=["*"],
+        allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
     )
