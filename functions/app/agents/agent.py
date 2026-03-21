@@ -1,10 +1,8 @@
 import operator
-from typing import Annotated, Sequence, TypedDict, Any
+from typing import Annotated, Sequence, TypedDict
 from langchain_core.messages import BaseMessage, HumanMessage
 import logging
 from app.config import get_settings
-
-logger = logging.getLogger("uvicorn")
 
 logger = logging.getLogger("uvicorn")
 
@@ -17,7 +15,7 @@ class SafePathAgent:
     """SafePath ReAct 에이전트 빌더 및 실행기 (Phase 2: Conversational)"""
 
     def __init__(self):
-        from langgraph.graph import StateGraph
+        from langgraph.graph import StateGraph, END
         from langgraph.prebuilt import ToolNode
         from langgraph.checkpoint.memory import MemorySaver
         from langchain_openai import ChatOpenAI
